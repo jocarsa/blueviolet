@@ -19,6 +19,7 @@
             // Get the image parameter from the URL
             const urlParams = new URLSearchParams(window.location.search);
             const imageName = urlParams.get('image');
+            const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo purposes
 
             if (imageName) {
                 const lowResMapUrl = `endpoint/mapas/${imageName}`;
@@ -60,6 +61,12 @@
                         keys[e.key] = false;
                     });
 
+                    // Fetch other players' positions every second
+                    let otherPlayersData = [];
+                    setInterval(async () => {
+                        otherPlayersData = await getOtherPlayersPositions();
+                    }, 1000);
+
                     // Game loop
                     function gameLoop() {
                         updatePlayerPosition();
@@ -68,6 +75,7 @@
                     }
                     requestAnimationFrame(gameLoop);
 
+                    // Update player position and send to server
                     function updatePlayerPosition() {
                         let nextX = playerX;
                         let nextY = playerY;
@@ -83,6 +91,11 @@
                         }
                         if (!isCollidingWithWall(playerX, nextY)) {
                             playerY = nextY;
+                        }
+
+                        // Send player position to server every second
+                        if (Date.now() % 1000 < 50) {
+                            sendPlayerPosition(playerX, playerY);
                         }
                     }
 
@@ -100,6 +113,41 @@
                         // Draw the player at the center of the visible canvas
                         ctx.fillStyle = '#FF0000'; // Red player color
                         ctx.fillRect(canvas.width / 2 - playerSize / 2, canvas.height / 2 - playerSize / 2, playerSize, playerSize);
+
+                        // Draw other players
+                        otherPlayersData.forEach(player => {
+                            if (player.id !== playerId) {
+                                const otherPlayerX = player.x - offsetX;
+                                const otherPlayerY = player.y - offsetY;
+                                ctx.fillStyle = '#00FF00'; // Green for other players
+                                ctx.fillRect(otherPlayerX, otherPlayerY, playerSize, playerSize);
+                            }
+                        });
+                    }
+
+                    function sendPlayerPosition(x, y) {
+                        fetch('endpoint/multi.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ id: playerId, x: x, y: y }),
+                        }).catch(error => console.error('Error sending player position:', error));
+                    }
+
+                    async function getOtherPlayersPositions() {
+                        try {
+                            const response = await fetch('endpoint/multi.php');
+                            if (!response.ok) {
+                                console.error('Failed to get other players positions:', response.status, response.statusText);
+                                return [];
+                            }
+                            const data = await response.json();
+                            return data.players;
+                        } catch (error) {
+                            console.error('Error getting other players positions:', error);
+                            return [];
+                        }
                     }
 
                     function drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx) {
@@ -135,11 +183,8 @@
                         if (scaledX < 0 || scaledY < 0 || scaledX >= highResCanvas.width / scaleFactor || scaledY >= highResCanvas.height / scaleFactor) {
                             return true;
                         }
-                        const index = (scaledY * highResCanvas.width / scaleFactor + scaledX) * 4;
-                        const r = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data[0];
-                        const g = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data[1];
-                        const b = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data[2];
-                        return r === 44 && g === 62 && b === 80; // Wall color (dark blue/gray)
+                        const pixelData = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data;
+                        return pixelData[0] === 44 && pixelData[1] === 62 && pixelData[2] === 80; // Wall color (dark blue/gray)
                     }
                 };
             }
@@ -154,7 +199,7 @@
 
         // Function to draw terrain
         function drawTerrain(ctx, x, y, size) {
-            ctx.fillStyle = '#000000'; // Example terrain color (green)
+            ctx.fillStyle = '#000000'; // Example terrain color (black)
             ctx.fillRect(x, y, size, size);
         }
 
