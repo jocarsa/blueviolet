@@ -4,6 +4,112 @@
 		<title>BlueViolet</title>
 	</head>
 	<body>
-		
+		<script>
+			const lowResMapUrl = 'endpoint/mapa.png'; // Replace with the actual path to your generated image
+
+			const canvas = document.createElement('canvas');
+			const ctx = canvas.getContext('2d');
+
+			// Load the low-resolution map
+			const img = new Image();
+			img.src = lowResMapUrl;
+			img.onload = () => {
+				 // Set canvas size to the size of the loaded image
+				 canvas.width = img.width;
+				 canvas.height = img.height;
+				 ctx.drawImage(img, 0, 0);
+
+				 // Get pixel data from the low-resolution map
+				 const lowResData = ctx.getImageData(0, 0, img.width, img.height);
+
+				 // Prepare a high-resolution canvas
+				 const scaleFactor = 4; // Scale factor for high-resolution map
+				 const highResCanvas = document.createElement('canvas');
+				 highResCanvas.width = img.width * scaleFactor;
+				 highResCanvas.height = img.height * scaleFactor;
+				 const highResCtx = highResCanvas.getContext('2d');
+
+				 // Create the high-resolution map
+				 for (let y = 0; y < img.height; y++) {
+					  for (let x = 0; x < img.width; x++) {
+						   const index = (y * img.width + x) * 4;
+						   const r = lowResData.data[index];
+						   const g = lowResData.data[index + 1];
+						   const b = lowResData.data[index + 2];
+
+						   // Determine if the pixel is white (outside) or black (inside)
+						   if (r === 255 && g === 255 && b === 255) {
+						       // Draw terrain for outside areas
+						       drawTerrain(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+						   } else if (r === 0 && g === 0 && b === 0) {
+						       // Draw floor tiling for inside areas
+						       drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+						   }
+					  }
+				 }
+
+				 // Draw walls between white and black pixels
+				 for (let y = 0; y < img.height; y++) {
+					  for (let x = 0; x < img.width; x++) {
+						   const index = (y * img.width + x) * 4;
+						   const r = lowResData.data[index];
+						   const g = lowResData.data[index + 1];
+						   const b = lowResData.data[index + 2];
+
+						   if (r === 0 && g === 0 && b === 0) {
+						       // Check neighboring pixels to determine if a wall is needed
+						       if (isWhite(lowResData, x - 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
+						       if (isWhite(lowResData, x + 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
+						       if (isWhite(lowResData, x, y - 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
+						       if (isWhite(lowResData, x, y + 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
+						   }
+					  }
+				 }
+
+				 // Append the high-resolution canvas to the document body
+				 document.body.appendChild(highResCanvas);
+			};
+
+			// Helper function to check if a pixel is white
+			function isWhite(imageData, x, y, width) {
+				 if (x < 0 || y < 0 || x >= width || y >= imageData.height) return false;
+				 const index = (y * width + x) * 4;
+				 return imageData.data[index] === 255 && imageData.data[index + 1] === 255 && imageData.data[index + 2] === 255;
+			}
+
+			// Function to draw terrain
+			function drawTerrain(ctx, x, y, size) {
+				 ctx.fillStyle = '#A9DFBF'; // Example terrain color (green)
+				 ctx.fillRect(x, y, size, size);
+			}
+
+			// Function to draw floor tiling
+			function drawFloor(ctx, x, y, size) {
+				 ctx.fillStyle = '#BDC3C7'; // Example floor color (light gray)
+				 ctx.fillRect(x, y, size, size);
+				 ctx.strokeStyle = '#95A5A6'; // Tile border color (darker gray)
+				 ctx.strokeRect(x, y, size, size);
+			}
+
+			// Function to draw a wall
+			function drawWall(ctx, x, y, direction, size) {
+				 ctx.fillStyle = '#2C3E50'; // Example wall color (dark blue/gray)
+				 switch (direction) {
+					  case 'left':
+						   ctx.fillRect(x, y, size / 4, size);
+						   break;
+					  case 'right':
+						   ctx.fillRect(x + (3 * size) / 4, y, size / 4, size);
+						   break;
+					  case 'top':
+						   ctx.fillRect(x, y, size, size / 4);
+						   break;
+					  case 'bottom':
+						   ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
+						   break;
+				 }
+			}
+
+		</script>
 	</body>
 </html>
