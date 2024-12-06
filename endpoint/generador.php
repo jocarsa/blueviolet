@@ -18,10 +18,10 @@ $rooms = [];
 
 // Generate random rooms
 for ($i = 0; $i < $roomCount; $i++) {
-    $roomX = rand(10, $anchura-10);
-    $roomY = rand(10, $anchura-10);
-    $roomWidth = rand($anchura/5, $anchura/20);
-    $roomHeight = rand($anchura/5, $anchura/20);
+    $roomX = rand(10, $anchura - 10);
+    $roomY = rand(10, $anchura - 10);
+    $roomWidth = rand($anchura / 20, $anchura / 5);
+    $roomHeight = rand($anchura / 20, $anchura / 5);
     
     // Draw the room as a filled rectangle
     imagefilledrectangle(
@@ -40,12 +40,12 @@ for ($i = 0; $i < $roomCount; $i++) {
 
 // Draw corridors connecting the rooms
 $corridorThickness = 2; // Thickness of the corridor lines
+imagesetthickness($image, $corridorThickness);
 for ($i = 1; $i < count($rooms); $i++) {
     $prevRoom = $rooms[$i - 1];
     $currRoom = $rooms[$i];
     
     // Draw a horizontal line
-    imagesetthickness($image, $corridorThickness);
     imageline(
         $image,
         $prevRoom['centerX'], $prevRoom['centerY'],
@@ -62,8 +62,20 @@ for ($i = 1; $i < count($rooms); $i++) {
     );
 }
 
-// Output the image
-header('Content-Type: image/png');
-imagepng($image);
+// Create the "mapas" directory if it doesn't exist
+$directory = 'mapas';
+if (!is_dir($directory)) {
+    mkdir($directory, 0755, true);
+}
+
+// Save the image to the "mapas" folder with the filename as the epoch time
+$filename = $directory . '/' . time() . '.png';
+imagepng($image, $filename);
+
+// Clean up
 imagedestroy($image);
+
+// Output the filename for confirmation
+echo "Image saved as: " . $filename;
+?>
 
