@@ -4,6 +4,11 @@
   <title>BlueViolet</title>
 </head>
 <body>
+  <div>
+    <label for="usernameInput">Enter your username:</label>
+    <input type="text" id="usernameInput" placeholder="Username" />
+  </div>
+
   <select id="imageSelect">
     <option value="">Select an image</option>
   </select>
@@ -20,7 +25,7 @@
   <button id="startGameButton">Start Game</button>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       // Fetch the list of images from the PHP endpoint
       fetch('endpoint/?o=mapas')
         .then(response => {
@@ -45,17 +50,27 @@
         });
 
       // Add event listener to start game on button click
-      document.getElementById('startGameButton').addEventListener('click', function() {
+      document.getElementById('startGameButton').addEventListener('click', function () {
+        const username = document.getElementById('usernameInput').value.trim();
         const selectedImage = document.getElementById('imageSelect').value;
         const selectedColor = document.getElementById('colorSelect').value;
 
-        if (selectedImage && selectedColor) {
-          window.location.href = `mapa.html?image=${encodeURIComponent(selectedImage)}&color=${encodeURIComponent(selectedColor)}`;
-        } else {
-          alert('Please select both an image and a color to start the game.');
+        if (!username) {
+          alert('Please enter a username to start the game.');
+          return;
         }
+
+        if (!selectedImage || !selectedColor) {
+          alert('Please select both an image and a color to start the game.');
+          return;
+        }
+
+        
+
+        window.location.href = `mapa.html?image=${encodeURIComponent(selectedImage)}&color=${encodeURIComponent(selectedColor)}&username=${encodeURIComponent(username)}`;
       });
     });
   </script>
 </body>
 </html>
+

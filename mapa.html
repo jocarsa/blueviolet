@@ -21,7 +21,8 @@
       const imageName = urlParams.get('image');
       const playerColor = urlParams.get('color') || '#FF0000'; // Default color is red if not specified
       const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo purposes
-
+      const username = urlParams.get('username');
+      
       if (imageName) {
         const lowResMapUrl = `endpoint/mapas/${imageName}`;
 
@@ -88,7 +89,8 @@
                     color: player.color,
                     prevX: player.x,
                     prevY: player.y,
-                    lastUpdate: Date.now()
+                    lastUpdate: Date.now(),
+                    username: player.username
                   };
                 } else {
                   otherPlayersData[player.id].prevX = otherPlayersData[player.id].x;
@@ -97,6 +99,7 @@
                   otherPlayersData[player.id].y = player.y;
                   otherPlayersData[player.id].color = player.color;
                   otherPlayersData[player.id].lastUpdate = Date.now();
+                  otherPlayersData[player.id].username = player.username;
                 }
               }
             });
@@ -139,7 +142,7 @@
 
             // Draw the player at the center of the visible canvas
             if (playerSprite.width > 0 && playerSprite.height > 0) {
-              drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor);
+              drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
             }
 
             // Draw other players with interpolation
@@ -151,7 +154,7 @@
               const otherPlayerX = interpolatedX - offsetX;
               const otherPlayerY = interpolatedY - offsetY;
               if (playerSprite.width > 0 && playerSprite.height > 0) {
-                drawPlayerSprite(ctx, playerSprite, otherPlayerX, otherPlayerY, player.color || '#00FF00');
+                drawPlayerSprite(ctx, playerSprite, otherPlayerX, otherPlayerY, player.color || '#00FF00', player.username);
               }
             });
           }
@@ -162,7 +165,7 @@
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ id: playerId, x: x, y: y, color: color }),
+              body: JSON.stringify({ id: playerId, x: x, y: y, color: color, username: username }),
             }).catch(error => console.error('Error sending player position:', error));
           }
 
@@ -208,7 +211,7 @@
             }
           }
 
-          function drawPlayerSprite(ctx, sprite, x, y, color) {
+          function drawPlayerSprite(ctx, sprite, x, y, color, username) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = sprite.width;
             tempCanvas.height = sprite.height;
@@ -230,6 +233,8 @@
             tempCtx.putImageData(imageData, 0, 0);
 
             ctx.drawImage(tempCanvas, x - sprite.width / 2, y - sprite.height / 2);
+            ctx.fillStyle = '#FFFFFF'; // Set text color to white
+            ctx.fillText(username, x - sprite.width / 2, y - sprite.height / 2 - 10);
           }
 
           function getHueFromColor(color) {
