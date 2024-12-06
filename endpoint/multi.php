@@ -7,13 +7,14 @@ error_reporting(E_ALL);
 // Use a file to save player positions as a simple data store
 define('POSITIONS_FILE', 'player_positions.json');
 
-//default_timezone_set('UTC'); // Ensure consistent timestamps
+// Set default timezone for consistent timestamps
+date_default_timezone_set('UTC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get the posted data
     $data = json_decode(file_get_contents('php://input'), true);
     
-    if (isset($data['id']) && isset($data['x']) && isset($data['y'])) {
+    if (isset($data['id']) && isset($data['x']) && isset($data['y']) && isset($data['color'])) {
         // Read current player positions from the file
         $playerPositions = getPlayerPositions();
 
@@ -23,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'id' => $playerId,
             'x' => $data['x'],
             'y' => $data['y'],
+            'color' => $data['color'],
             'timestamp' => time()
         ];
 

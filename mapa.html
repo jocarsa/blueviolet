@@ -1,235 +1,259 @@
 <!doctype html>
 <html>
 <head>
-    <title>Mapa Viewer Game</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #000;
-        }
-        canvas {
-            display: block;
-        }
-    </style>
+  <title>Mapa Viewer Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
 </head>
 <body>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Get the image parameter from the URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const imageName = urlParams.get('image');
-            const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo purposes
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Get the image and color parameters from the URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const imageName = urlParams.get('image');
+      const playerColor = urlParams.get('color') || '#FF0000'; // Default color is red if not specified
+      const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo purposes
 
-            if (imageName) {
-                const lowResMapUrl = `endpoint/mapas/${imageName}`;
+      if (imageName) {
+        const lowResMapUrl = `endpoint/mapas/${imageName}`;
 
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                document.body.appendChild(canvas);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
 
-                // Set initial canvas size to window size
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+        // Set initial canvas size to window size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-                // Load the low-resolution map
-                const img = new Image();
-                img.src = lowResMapUrl;
-                img.onload = () => {
-                    // Prepare the high-resolution map canvas
-                    const scaleFactor = 64;
-                    const highResCanvas = document.createElement('canvas');
-                    highResCanvas.width = img.width * scaleFactor;
-                    highResCanvas.height = img.height * scaleFactor;
-                    const highResCtx = highResCanvas.getContext('2d');
+        // Load the low-resolution map
+        const img = new Image();
+        img.src = lowResMapUrl;
+        img.onload = () => {
+          // Prepare the high-resolution map canvas
+          const scaleFactor = 64;
+          const highResCanvas = document.createElement('canvas');
+          highResCanvas.width = img.width * scaleFactor;
+          highResCanvas.height = img.height * scaleFactor;
+          const highResCtx = highResCanvas.getContext('2d');
 
-                    // Draw and process the map to create the high-resolution version
-                    drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx);
+          // Draw and process the map to create the high-resolution version
+          drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx);
 
-                    // Game logic variables
-                    let playerX = highResCanvas.width / 2;
-                    let playerY = highResCanvas.height / 2;
-                    const playerSize = 10;
-                    const speed = 2;
+          // Game logic variables
+          let playerX = highResCanvas.width / 2;
+          let playerY = highResCanvas.height / 2;
+          const playerSize = 10;
+          const speed = 2;
 
-                    // Handle keyboard input
-                    const keys = {};
-                    window.addEventListener('keydown', (e) => {
-                        keys[e.key] = true;
-                    });
-                    window.addEventListener('keyup', (e) => {
-                        keys[e.key] = false;
-                    });
+          // Handle keyboard input
+          const keys = {};
+          window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+          });
+          window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+          });
 
-                    // Fetch other players' positions every second
-                    let otherPlayersData = [];
-                    setInterval(async () => {
-                        otherPlayersData = await getOtherPlayersPositions();
-                    }, 1000);
+          // Fetch other players' positions every second
+          let otherPlayersData = {};
+          setInterval(async () => {
+            const newPlayersData = await getOtherPlayersPositions();
+            newPlayersData.forEach(player => {
+              if (player.id !== playerId) {
+                if (!otherPlayersData[player.id]) {
+                  otherPlayersData[player.id] = {
+                    x: player.x,
+                    y: player.y,
+                    color: player.color,
+                    prevX: player.x,
+                    prevY: player.y,
+                    lastUpdate: Date.now()
+                  };
+                } else {
+                  otherPlayersData[player.id].prevX = otherPlayersData[player.id].x;
+                  otherPlayersData[player.id].prevY = otherPlayersData[player.id].y;
+                  otherPlayersData[player.id].x = player.x;
+                  otherPlayersData[player.id].y = player.y;
+                  otherPlayersData[player.id].color = player.color;
+                  otherPlayersData[player.id].lastUpdate = Date.now();
+                }
+              }
+            });
+          }, 1000);
 
-                    // Game loop
-                    function gameLoop() {
-                        updatePlayerPosition();
-                        drawGameView();
-                        requestAnimationFrame(gameLoop);
-                    }
-                    requestAnimationFrame(gameLoop);
+          // Game loop
+          function gameLoop() {
+            updatePlayerPosition();
+            drawGameView();
+            requestAnimationFrame(gameLoop);
+          }
+          requestAnimationFrame(gameLoop);
 
-                    // Update player position and send to server
-                    function updatePlayerPosition() {
-                        let nextX = playerX;
-                        let nextY = playerY;
+          // Update player position and send to server
+          function updatePlayerPosition() {
+            let nextX = playerX;
+            let nextY = playerY;
 
-                        if (keys['w'] || keys['ArrowUp']) nextY -= speed;
-                        if (keys['s'] || keys['ArrowDown']) nextY += speed;
-                        if (keys['a'] || keys['ArrowLeft']) nextX -= speed;
-                        if (keys['d'] || keys['ArrowRight']) nextX += speed;
+            if (keys['w'] || keys['ArrowUp']) nextY -= speed;
+            if (keys['s'] || keys['ArrowDown']) nextY += speed;
+            if (keys['a'] || keys['ArrowLeft']) nextX -= speed;
+            if (keys['d'] || keys['ArrowRight']) nextX += speed;
 
-                        // Check collisions with walls
-                        if (!isCollidingWithWall(nextX, playerY)) {
-                            playerX = nextX;
-                        }
-                        if (!isCollidingWithWall(playerX, nextY)) {
-                            playerY = nextY;
-                        }
-
-                        // Send player position to server every second
-                        if (Date.now() % 1000 < 50) {
-                            sendPlayerPosition(playerX, playerY);
-                        }
-                    }
-
-                    function drawGameView() {
-                        // Clear the visible canvas
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                        // Determine what part of the map to render based on player position
-                        const viewWidth = canvas.width;
-                        const viewHeight = canvas.height;
-                        const offsetX = Math.max(0, Math.min(highResCanvas.width - viewWidth, playerX - viewWidth / 2));
-                        const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
-                        ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
-
-                        // Draw the player at the center of the visible canvas
-                        ctx.fillStyle = '#FF0000'; // Red player color
-                        ctx.fillRect(canvas.width / 2 - playerSize / 2, canvas.height / 2 - playerSize / 2, playerSize, playerSize);
-
-                        // Draw other players
-                        otherPlayersData.forEach(player => {
-                            if (player.id !== playerId) {
-                                const otherPlayerX = player.x - offsetX;
-                                const otherPlayerY = player.y - offsetY;
-                                ctx.fillStyle = '#00FF00'; // Green for other players
-                                ctx.fillRect(otherPlayerX, otherPlayerY, playerSize, playerSize);
-                            }
-                        });
-                    }
-
-                    function sendPlayerPosition(x, y) {
-                        fetch('endpoint/multi.php', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ id: playerId, x: x, y: y }),
-                        }).catch(error => console.error('Error sending player position:', error));
-                    }
-
-                    async function getOtherPlayersPositions() {
-                        try {
-                            const response = await fetch('endpoint/multi.php');
-                            if (!response.ok) {
-                                console.error('Failed to get other players positions:', response.status, response.statusText);
-                                return [];
-                            }
-                            const data = await response.json();
-                            return data.players;
-                        } catch (error) {
-                            console.error('Error getting other players positions:', error);
-                            return [];
-                        }
-                    }
-
-                    function drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx) {
-                        // Draw low-resolution image onto a canvas
-                        ctx.drawImage(img, 0, 0);
-                        const lowResData = ctx.getImageData(0, 0, img.width, img.height);
-
-                        // Create the high-resolution map on highResCanvas
-                        for (let y = 0; y < img.height; y++) {
-                            for (let x = 0; x < img.width; x++) {
-                                const index = (y * img.width + x) * 4;
-                                const r = lowResData.data[index];
-                                const g = lowResData.data[index + 1];
-                                const b = lowResData.data[index + 2];
-
-                                if (r === 255 && g === 255 && b === 255) {
-                                    drawTerrain(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
-                                } else if (r === 0 && g === 0 && b === 0) {
-                                    drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
-                                    // Check neighbors to draw walls
-                                    if (isWhite(lowResData, x - 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
-                                    if (isWhite(lowResData, x + 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
-                                    if (isWhite(lowResData, x, y - 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
-                                    if (isWhite(lowResData, x, y + 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
-                                }
-                            }
-                        }
-                    }
-
-                    function isCollidingWithWall(x, y) {
-                        const scaledX = Math.floor(x / scaleFactor);
-                        const scaledY = Math.floor(y / scaleFactor);
-                        if (scaledX < 0 || scaledY < 0 || scaledX >= highResCanvas.width / scaleFactor || scaledY >= highResCanvas.height / scaleFactor) {
-                            return true;
-                        }
-                        const pixelData = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data;
-                        return pixelData[0] === 44 && pixelData[1] === 62 && pixelData[2] === 80; // Wall color (dark blue/gray)
-                    }
-                };
+            // Check collisions with walls
+            if (!isCollidingWithWall(nextX, playerY)) {
+              playerX = nextX;
             }
-        });
-
-        // Helper function to check if a pixel is white
-        function isWhite(imageData, x, y, width) {
-            if (x < 0 || y < 0 || x >= width || y >= imageData.height) return false;
-            const index = (y * width + x) * 4;
-            return imageData.data[index] === 255 && imageData.data[index + 1] === 255 && imageData.data[index + 2] === 255;
-        }
-
-        // Function to draw terrain
-        function drawTerrain(ctx, x, y, size) {
-            ctx.fillStyle = '#000000'; // Example terrain color (black)
-            ctx.fillRect(x, y, size, size);
-        }
-
-        // Function to draw floor tiling
-        function drawFloor(ctx, x, y, size) {
-            ctx.fillStyle = '#BDC3C7'; // Example floor color (light gray)
-            ctx.fillRect(x, y, size, size);
-            ctx.strokeStyle = '#95A5A6'; // Tile border color (darker gray)
-            ctx.strokeRect(x, y, size, size);
-        }
-
-        // Function to draw a wall
-        function drawWall(ctx, x, y, direction, size) {
-            ctx.fillStyle = '#2C3E50'; // Example wall color (dark blue/gray)
-            switch (direction) {
-                case 'left':
-                    ctx.fillRect(x, y, size / 4, size);
-                    break;
-                case 'right':
-                    ctx.fillRect(x + (3 * size) / 4, y, size / 4, size);
-                    break;
-                case 'top':
-                    ctx.fillRect(x, y, size, size / 4);
-                    break;
-                case 'bottom':
-                    ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
-                    break;
+            if (!isCollidingWithWall(playerX, nextY)) {
+              playerY = nextY;
             }
-        }
-    </script>
+
+            // Send player position to server every second
+            if (Date.now() % 1000 < 50) {
+              sendPlayerPosition(playerX, playerY, playerColor);
+            }
+          }
+
+          function drawGameView() {
+            // Clear the visible canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Determine what part of the map to render based on player position
+            const viewWidth = canvas.width;
+            const viewHeight = canvas.height;
+            const offsetX = Math.max(0, Math.min(highResCanvas.width - viewWidth, playerX - viewWidth / 2));
+            const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
+            ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
+
+            // Draw the player at the center of the visible canvas
+            ctx.fillStyle = playerColor; // Use selected player color
+            ctx.fillRect(canvas.width / 2 - playerSize / 2, canvas.height / 2 - playerSize / 2, playerSize, playerSize);
+
+            // Draw other players with interpolation
+            const currentTime = Date.now();
+            Object.values(otherPlayersData).forEach(player => {
+              const progress = Math.min(1, (currentTime - player.lastUpdate) / 1000);
+              const interpolatedX = player.prevX + (player.x - player.prevX) * progress;
+              const interpolatedY = player.prevY + (player.y - player.prevY) * progress;
+              const otherPlayerX = interpolatedX - offsetX;
+              const otherPlayerY = interpolatedY - offsetY;
+              ctx.fillStyle = player.color || '#00FF00'; // Use player color or default to green
+              ctx.fillRect(otherPlayerX, otherPlayerY, playerSize, playerSize);
+            });
+          }
+
+          function sendPlayerPosition(x, y, color) {
+            fetch('endpoint/multi.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ id: playerId, x: x, y: y, color: color }),
+            }).catch(error => console.error('Error sending player position:', error));
+          }
+
+          async function getOtherPlayersPositions() {
+            try {
+              const response = await fetch('endpoint/multi.php');
+              if (!response.ok) {
+                console.error('Failed to get other players positions:', response.status, response.statusText);
+                return [];
+              }
+              const data = await response.json();
+              return data.players;
+            } catch (error) {
+              console.error('Error getting other players positions:', error);
+              return [];
+            }
+          }
+
+          function drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx) {
+            // Draw low-resolution image onto a canvas
+            ctx.drawImage(img, 0, 0);
+            const lowResData = ctx.getImageData(0, 0, img.width, img.height);
+
+            // Create the high-resolution map on highResCanvas
+            for (let y = 0; y < img.height; y++) {
+              for (let x = 0; x < img.width; x++) {
+                const index = (y * img.width + x) * 4;
+                const r = lowResData.data[index];
+                const g = lowResData.data[index + 1];
+                const b = lowResData.data[index + 2];
+
+                if (r === 255 && g === 255 && b === 255) {
+                  drawTerrain(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+                } else if (r === 0 && g === 0 && b === 0) {
+                  drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+                  // Check neighbors to draw walls
+                  if (isWhite(lowResData, x - 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
+                  if (isWhite(lowResData, x + 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
+                  if (isWhite(lowResData, x, y - 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
+                  if (isWhite(lowResData, x, y + 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
+                }
+              }
+            }
+          }
+
+          function isCollidingWithWall(x, y) {
+            const scaledX = Math.floor(x / scaleFactor);
+            const scaledY = Math.floor(y / scaleFactor);
+            if (scaledX < 0 || scaledY < 0 || scaledX >= highResCanvas.width / scaleFactor || scaledY >= highResCanvas.height / scaleFactor) {
+              return true;
+            }
+            const pixelData = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data;
+            return pixelData[0] === 44 && pixelData[1] === 62 && pixelData[2] === 80; // Wall color (dark blue/gray)
+          }
+        };
+      }
+    });
+
+    // Helper function to check if a pixel is white
+    function isWhite(imageData, x, y, width) {
+      if (x < 0 || y < 0 || x >= width || y >= imageData.height) return false;
+      const index = (y * width + x) * 4;
+      return imageData.data[index] === 255 && imageData.data[index + 1] === 255 && imageData.data[index + 2] === 255;
+    }
+
+    // Function to draw terrain
+    function drawTerrain(ctx, x, y, size) {
+      ctx.fillStyle = '#000000'; // Example terrain color (black)
+      ctx.fillRect(x, y, size, size);
+    }
+
+    // Function to draw floor tiling
+    function drawFloor(ctx, x, y, size) {
+      ctx.fillStyle = '#BDC3C7'; // Example floor color (light gray)
+      ctx.fillRect(x, y, size, size);
+      ctx.strokeStyle = '#95A5A6'; // Tile border color (darker gray)
+      ctx.strokeRect(x, y, size, size);
+    }
+
+    // Function to draw a wall
+    function drawWall(ctx, x, y, direction, size) {
+      ctx.fillStyle = '#2C3E50'; // Example wall color (dark blue/gray)
+      switch (direction) {
+        case 'left':
+          ctx.fillRect(x, y, size / 4, size);
+          break;
+        case 'right':
+          ctx.fillRect(x + (3 * size) / 4, y, size / 4, size);
+          break;
+        case 'top':
+          ctx.fillRect(x, y, size, size / 4);
+          break;
+        case 'bottom':
+          ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
+          break;
+      }
+    }
+  </script>
 </body>
 </html>
 

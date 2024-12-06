@@ -1,47 +1,61 @@
 <!doctype html>
 <html>
-	<head>
-		<title>BlueViolet</title>
-	</head>
-	<body>
-		<select id="imageSelect">
-			<option value="">Select an image</option>
-		</select>
+<head>
+  <title>BlueViolet</title>
+</head>
+<body>
+  <select id="imageSelect">
+    <option value="">Select an image</option>
+  </select>
 
-		<script>
-			document.addEventListener('DOMContentLoaded', function() {
-				// Fetch the list of images from the PHP endpoint
-				fetch('endpoint/?o=mapas')
-					.then(response => {
-						if (!response.ok) {
-							throw new Error('Network response was not ok');
-						}
-						return response.json();
-					})
-					.then(data => {
-						const selectElement = document.getElementById('imageSelect');
+  <select id="colorSelect">
+    <option value="">Select a color</option>
+    <option value="red">Red</option>
+    <option value="blue">Blue</option>
+    <option value="green">Green</option>
+    <option value="yellow">Yellow</option>
+    <option value="purple">Purple</option>
+  </select>
 
-						// Populate the select element with the image names
-						data.forEach(imageName => {
-							const option = document.createElement('option');
-							option.value = imageName;
-							option.textContent = imageName;
-							selectElement.appendChild(option);
-						});
-					})
-					.catch(error => {
-						console.error('There has been a problem with your fetch operation:', error);
-					});
+  <button id="startGameButton">Start Game</button>
 
-				// Add event listener to redirect on selection change
-				document.getElementById('imageSelect').addEventListener('change', function() {
-					const selectedImage = this.value;
-					if (selectedImage) {
-						window.location.href = `mapa.html?image=${encodeURIComponent(selectedImage)}`;
-					}
-				});
-			});
-		</script>
-	</body>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Fetch the list of images from the PHP endpoint
+      fetch('endpoint/?o=mapas')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const selectElement = document.getElementById('imageSelect');
+
+          // Populate the select element with the image names
+          data.forEach(imageName => {
+            const option = document.createElement('option');
+            option.value = imageName;
+            option.textContent = imageName;
+            selectElement.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error('There has been a problem with your fetch operation:', error);
+        });
+
+      // Add event listener to start game on button click
+      document.getElementById('startGameButton').addEventListener('click', function() {
+        const selectedImage = document.getElementById('imageSelect').value;
+        const selectedColor = document.getElementById('colorSelect').value;
+
+        if (selectedImage && selectedColor) {
+          window.location.href = `mapa.html?image=${encodeURIComponent(selectedImage)}&color=${encodeURIComponent(selectedColor)}`;
+        } else {
+          alert('Please select both an image and a color to start the game.');
+        }
+      });
+    });
+  </script>
+</body>
 </html>
-
