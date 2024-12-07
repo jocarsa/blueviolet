@@ -1,28 +1,131 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BlueViolet</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom right, #4F2E7F, #8A2BE2); /* gradient with BlueViolet */
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 40px;
+      border-radius: 10px;
+      width: 300px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+
+    .container h1 {
+      font-size: 1.8em;
+      margin-bottom: 20px;
+      font-weight: normal;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.9em;
+      font-weight: bold;
+    }
+
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.9em;
+      color: #333;
+      background: #fff;
+      box-sizing: border-box;
+    }
+
+    .form-group input::placeholder {
+      color: #888;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #8A2BE2; /* BlueViolet */
+      color: #fff;
+      padding: 10px 20px;
+      font-size: 0.9em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      margin-top: 10px;
+      width: 100%;
+    }
+
+    .btn:hover {
+      background: #7a24c7; /* slightly darker variant of BlueViolet */
+    }
+
+    .info-text {
+      font-size: 0.8em;
+      color: #ddd;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 400px) {
+      .container {
+        width: 90%;
+        padding: 20px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div>
-    <label for="usernameInput">Enter your username:</label>
-    <input type="text" id="usernameInput" placeholder="Username" />
+  <div class="container">
+    <h1>BlueViolet</h1>
+
+    <div class="form-group">
+      <label for="usernameInput">Introduce tu usuario:</label>
+      <input type="text" id="usernameInput" placeholder="Ejemplo: Juan123" />
+    </div>
+
+    <div class="form-group">
+      <label for="imageSelect">Selecciona un mapa:</label>
+      <select id="imageSelect">
+        <option value="">-- Selecciona un mapa --</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="colorSelect">Selecciona un color:</label>
+      <select id="colorSelect">
+        <option value="">-- Selecciona un color --</option>
+        <option value="#ff0000">Rojo</option>
+        <option value="#0000ff">Azul</option>
+        <option value="#00ff00">Verde</option>
+        <option value="#ffff00">Amarillo</option>
+        <option value="#800080">Púrpura</option>
+      </select>
+    </div>
+
+    <button class="btn" id="startGameButton">Iniciar el juego</button>
+
+    <div class="info-text">
+      Selecciona tus opciones y haz clic en "Iniciar el juego".
+    </div>
   </div>
-
-  <select id="imageSelect">
-    <option value="">Select an image</option>
-  </select>
-
-  <select id="colorSelect">
-    <option value="">Select a color</option>
-    <option value="#ff0000">Red</option>
-    <option value="#0000ff">Blue</option>
-    <option value="#00ff00">Green</option>
-    <option value="#ffff00">Yellow</option>
-    <option value="#800080">Purple</option>
-  </select>
-
-  <button id="startGameButton">Start Game</button>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -56,16 +159,14 @@
         const selectedColor = document.getElementById('colorSelect').value;
 
         if (!username) {
-          alert('Please enter a username to start the game.');
+          alert('Por favor, introduce un nombre de usuario para iniciar el juego.');
           return;
         }
 
         if (!selectedImage || !selectedColor) {
-          alert('Please select both an image and a color to start the game.');
+          alert('Por favor, selecciona tanto un mapa como un color para iniciar el juego.');
           return;
         }
-
-        
 
         window.location.href = `mapa.html?image=${encodeURIComponent(selectedImage)}&color=${encodeURIComponent(selectedColor)}&username=${encodeURIComponent(username)}`;
       });

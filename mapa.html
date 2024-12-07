@@ -1,20 +1,56 @@
 <!doctype html>
 <html>
 <head>
-  <title>Mapa Viewer Game</title>
+  <title>BlueViolet</title>
+  <meta charset="utf-8">
   <style>
     body {
       margin: 0;
       overflow: hidden;
       background: #000;
       font-family: sans-serif;
+      color: #FFFFFF;
     }
     canvas {
       display: block;
     }
+    .scoreboard {
+      position: absolute;
+      top: 50px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      font-size: 14px;
+      color: #FFFFFF;
+    }
+    .winnerOverlay {
+      position: absolute;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background: rgba(0,255,0,0.2); /* green tint */
+      pointer-events:none;
+      display:none;
+    }
+    .winnerMessage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      background: rgba(0,0,0,0.7);
+      padding: 20px;
+      font-size: 24px;
+      color: #00FF00;
+      display:none;
+    }
   </style>
 </head>
 <body>
+  <div class="scoreboard" id="scoreboard"></div>
+  <div class="winnerOverlay" id="winnerOverlay"></div>
+  <div class="winnerMessage" id="winnerMessage">Ganador: </div>
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const urlParams = new URLSearchParams(window.location.search);
@@ -34,25 +70,32 @@
       const ctx = canvas.getContext('2d');
       document.body.appendChild(canvas);
 
-      // Set initial canvas size to window size
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
 
       const img = new Image();
       img.src = lowResMapUrl;
+
+      let totalGoals = 0;
+      let collectedGoals = 0;
+      let allGoalsCollected = false;
+
+      let winnerId = null; // Will be set when we know there's a winner
+      const scoreboardDiv = document.getElementById('scoreboard');
+      const winnerOverlay = document.getElementById('winnerOverlay');
+      const winnerMessage = document.getElementById('winnerMessage');
+
       img.onload = () => {
         const scaleFactor = 64;
         const highResCanvas = document.createElement('canvas');
         const highResCtx = highResCanvas.getContext('2d');
 
-        // Draw low-res image onto ctx to get image data
         ctx.drawImage(img, 0, 0);
         const lowResData = ctx.getImageData(0, 0, img.width, img.height);
 
         highResCanvas.width = img.width * scaleFactor;
         highResCanvas.height = img.height * scaleFactor;
 
-        // Define special collectible colors (in RGB)
         const collectibleColors = [
           {name: 'red',     r:255,g:0,  b:0},
           {name: 'green',   r:0,  g:255,b:0},
@@ -62,7 +105,7 @@
           {name: 'cyan',    r:0,  g:255,b:255}
         ];
 
-        let colorGoals = []; // {x, y, w, h, colorName, collected:false}
+        let colorGoals = [];
 
         // Create a collision map
         const collisionMap = [];
@@ -80,15 +123,14 @@
         }
 
         drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoals);
+        totalGoals = colorGoals.length;
 
-        // Player setup
         let playerX = highResCanvas.width / 2;
         let playerY = highResCanvas.height / 2;
         let lastSentX = playerX;
         let lastSentY = playerY;
         const speed = 2;
 
-        // Keyboard input
         const keys = {};
         window.addEventListener('keydown', (e) => {
           keys[e.key] = true;
@@ -100,19 +142,15 @@
         const playerSprite = new Image();
         playerSprite.src = 'personaje.png';
 
-        // Create overlay canvas for fog of war
         const overlayCanvas = document.createElement('canvas');
         overlayCanvas.width = highResCanvas.width;
         overlayCanvas.height = highResCanvas.height;
         const overlayCtx = overlayCanvas.getContext('2d');
-        // Fill overlay with semi-transparent black
         overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         overlayCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
         function paintVisitedArea(x, y) {
           const radius = 600;
-          // Create a radial gradient from white center to transparent edge
-          // We'll use destination-out to remove the fog in visited areas
           const grad = overlayCtx.createRadialGradient(x, y, 0, x, y, radius);
           grad.addColorStop(0, 'rgba(255,255,255,0.01)');
           grad.addColorStop(1, 'rgba(255,255,255,0)');
@@ -125,21 +163,24 @@
           overlayCtx.globalCompositeOperation = 'source-over';
         }
 
+        let otherPlayersData = {};
+
         playerSprite.onload = () => {
           function gameLoop() {
             updatePlayerPosition();
             checkGoalCollection();
-            paintVisitedArea(playerX, playerY); // "Carve out" visited area
+            paintVisitedArea(playerX, playerY);
             drawGameView();
             requestAnimationFrame(gameLoop);
           }
           requestAnimationFrame(gameLoop);
         };
 
-        let otherPlayersData = {};
+        // Periodically fetch other players’ data (including their achievements)
         setInterval(async () => {
-          const newPlayersData = await getOtherPlayersPositions();
-          newPlayersData.forEach(player => {
+          const {players, winnerId: wId} = await getOtherPlayersPositions();
+          winnerId = wId; // Store the winner ID
+          players.forEach(player => {
             if (player.id !== playerId) {
               if (!otherPlayersData[player.id]) {
                 otherPlayersData[player.id] = {
@@ -149,7 +190,9 @@
                   prevX: player.x,
                   prevY: player.y,
                   lastUpdate: Date.now(),
-                  username: player.username
+                  username: player.username,
+                  achievedGoals: player.achievedGoals,
+                  totalGoals: player.totalGoals
                 };
               } else {
                 otherPlayersData[player.id].prevX = otherPlayersData[player.id].x;
@@ -159,28 +202,48 @@
                 otherPlayersData[player.id].color = player.color;
                 otherPlayersData[player.id].lastUpdate = Date.now();
                 otherPlayersData[player.id].username = player.username;
+                otherPlayersData[player.id].achievedGoals = player.achievedGoals;
+                otherPlayersData[player.id].totalGoals = player.totalGoals;
               }
             }
           });
+
+          // If there's a winner, show the winner overlay and highlight the winner
+          if (winnerId) {
+            winnerOverlay.style.display = 'block';
+            winnerMessage.style.display = 'block';
+            const winnerPlayer = (playerId === winnerId) ? {username: username} : 
+              (otherPlayersData[winnerId] || {username: 'Unknown Winner'});
+            winnerMessage.textContent = `Winner: ${winnerPlayer.username}`;
+          }
+
         }, 1000);
 
-        // Send player position to server every second if moved
+        // Send player data (including achievements) to server every second if moved or goals changed
         setInterval(() => {
-          if (playerX !== lastSentX || playerY !== lastSentY) {
-            sendPlayerPosition(playerX, playerY, playerColor);
+          if (playerX !== lastSentX || playerY !== lastSentY || allGoalsCollected) {
+            sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals);
             lastSentX = playerX;
             lastSentY = playerY;
           }
         }, 1000);
 
-        function sendPlayerPosition(x, y, color) {
+        function sendPlayerPosition(x, y, color, achievedGoals, totalGoals) {
           fetch('endpoint/multi.php', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ id: playerId, x: x, y: y, color: color, username: username }),
-          }).catch(error => console.error('Error sending player position:', error));
+            body: JSON.stringify({ 
+              id: playerId, 
+              x: x, 
+              y: y, 
+              color: color, 
+              username: username,
+              achievedGoals: achievedGoals,
+              totalGoals: totalGoals
+            }),
+          }).catch(error => console.error('Error sending player data:', error));
         }
 
         async function getOtherPlayersPositions() {
@@ -188,13 +251,13 @@
             const response = await fetch('endpoint/multi.php');
             if (!response.ok) {
               console.error('Failed to get other players positions:', response.status, response.statusText);
-              return [];
+              return {players:[], winnerId:null};
             }
             const data = await response.json();
-            return data.players;
+            return data;
           } catch (error) {
             console.error('Error getting other players positions:', error);
-            return [];
+            return {players:[], winnerId:null};
           }
         }
 
@@ -204,7 +267,6 @@
           if (tileX < 0 || tileY < 0 || tileX >= img.width || tileY >= img.height) {
             return false; // out of bounds
           }
-          // 0 = walkable, 1 = outside (collidable)
           return collisionMap[tileY][tileX] === 0;
         }
 
@@ -226,23 +288,23 @@
         }
 
         function checkGoalCollection() {
-          // Check if player is on any collectible tile
           for (let goal of colorGoals) {
             if (!goal.collected) {
               if (playerX >= goal.x && playerX < goal.x + goal.w &&
                   playerY >= goal.y && playerY < goal.y + goal.h) {
-                // Player has collected this goal
                 goal.collected = true;
+                collectedGoals++;
+                if (collectedGoals === totalGoals) {
+                  allGoalsCollected = true;
+                }
               }
             }
           }
         }
 
         function drawGameView() {
-          // Clear the visible canvas
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          // Determine what part of the map to render
           const viewWidth = canvas.width;
           const viewHeight = canvas.height;
           const offsetX = Math.max(0, Math.min(highResCanvas.width - viewWidth, playerX - viewWidth / 2));
@@ -250,12 +312,11 @@
 
           ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
 
-          // Draw the player
           if (playerSprite.width > 0 && playerSprite.height > 0) {
             drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
           }
 
-          // Draw other players with interpolation
+          // Draw other players
           const currentTime = Date.now();
           Object.values(otherPlayersData).forEach(player => {
             const progress = Math.min(1, (currentTime - player.lastUpdate) / 1000);
@@ -268,18 +329,31 @@
             }
           });
 
-          // Draw the overlay (fog of war)
-          // The overlay is black with transparent holes. Drawing it source-over
-          // will darken unvisited areas and show visited areas clearly.
+          // Draw fog of war
           ctx.drawImage(overlayCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
 
-          // Draw goals achieved overlay
-          const totalGoals = colorGoals.length;
-          const collectedGoals = colorGoals.filter(g => g.collected).length;
+          // Draw local player goals achievement
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(10,10,200,30);
+          ctx.fillRect(10,10,220,30);
           ctx.fillStyle = '#FFFFFF';
-          ctx.fillText(`Goals achieved: ${collectedGoals} of ${totalGoals}`, 20,30);
+          ctx.fillText(`Objetivos conseguidos: ${collectedGoals} of ${totalGoals}`, 20,30);
+
+          // Update scoreboard with all players (local + others)
+          drawScoreboard();
+
+          // If there is a winner, the overlay and message are shown via CSS, already handled above
+        }
+
+        function drawScoreboard() {
+          let scoreboardHTML = `<strong>Marcador</strong><br>`;
+          // Local player
+          scoreboardHTML += `${username} (Tú): ${collectedGoals}/${totalGoals}<br>`;
+          // Other players
+          for (const pId in otherPlayersData) {
+            const p = otherPlayersData[pId];
+            scoreboardHTML += `${p.username}: ${p.achievedGoals}/${p.totalGoals}<br>`;
+          }
+          scoreboardDiv.innerHTML = scoreboardHTML;
         }
 
         function drawPlayerSprite(ctx, sprite, x, y, color, username) {
@@ -289,7 +363,6 @@
           const tempCtx = tempCanvas.getContext('2d');
           tempCtx.drawImage(sprite, 0, 0);
 
-          // Change hue of the sprite
           const imageData = tempCtx.getImageData(0, 0, sprite.width, sprite.height);
           const targetHue = getHueFromColor(color);
           for (let i = 0; i < imageData.data.length; i += 4) {
@@ -378,7 +451,6 @@
                 if (neighborIsOutside(x, y-1, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
                 if (neighborIsOutside(x, y+1, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
 
-                // Check for collectibles
                 let matchedColor = collectibleColors.find(cc => cc.r === r && cc.g === g && cc.b === b);
                 if (matchedColor) {
                   highResCtx.fillStyle = `rgb(${r},${g},${b})`;
