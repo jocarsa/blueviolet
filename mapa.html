@@ -98,13 +98,20 @@
           this.size = 20; // NPC size for collision
         }
 
-        moveTowardPlayer(playerX, playerY) {
+        moveTowardPlayer(playerX, playerY, canMoveTo) {
           const dx = playerX - this.x;
           const dy = playerY - this.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist > 0) {
-            this.x += (dx / dist) * this.speed;
-            this.y += (dy / dist) * this.speed;
+            const stepX = (dx / dist) * this.speed;
+            const stepY = (dy / dist) * this.speed;
+            // Check collision for NPC
+            if (canMoveTo(this.x + stepX, this.y)) {
+              this.x += stepX;
+            }
+            if (canMoveTo(this.x, this.y + stepY)) {
+              this.y += stepY;
+            }
           }
         }
 
@@ -116,9 +123,6 @@
         }
 
         checkCollisionWithPlayer(px, py, playerWidth, playerHeight) {
-          // Simple bounding box collision
-          // Player is drawn centered. Let's assume sprite is playerWidth x playerHeight
-          // Player center: px, py
           const playerLeft = px - playerWidth/2;
           const playerRight = px + playerWidth/2;
           const playerTop = py - playerHeight/2;
@@ -184,7 +188,10 @@
         let playerY = highResCanvas.height / 2;
         let lastSentX = playerX;
         let lastSentY = playerY;
-        const speed = 2;
+
+        let baseSpeed = 2;
+        let runSpeed = 3;
+        let currentSpeed = baseSpeed;
 
         const keys = {};
         window.addEventListener('keydown', (e) => {
@@ -222,6 +229,7 @@
 
         playerSprite.onload = () => {
           function gameLoop() {
+            handleSpeedAndLife();
             updatePlayerPosition();
             checkGoalCollection();
             moveNPCs();
@@ -335,11 +343,12 @@
           let nextX = playerX;
           let nextY = playerY;
 
-          if (keys['w'] || keys['ArrowUp']) nextY -= speed;
-          if (keys['s'] || keys['ArrowDown']) nextY += speed;
-          if (keys['a'] || keys['ArrowLeft']) nextX -= speed;
-          if (keys['d'] || keys['ArrowRight']) nextX += speed;
+          if (keys['w'] || keys['ArrowUp']) nextY -= currentSpeed;
+          if (keys['s'] || keys['ArrowDown']) nextY += currentSpeed;
+          if (keys['a'] || keys['ArrowLeft']) nextX -= currentSpeed;
+          if (keys['d'] || keys['ArrowRight']) nextX += currentSpeed;
 
+          // Check collisions
           if (canMoveTo(nextX, playerY)) {
             playerX = nextX;
           }
@@ -365,13 +374,12 @@
 
         function moveNPCs() {
           npcs.forEach(npc => {
-            npc.moveTowardPlayer(playerX, playerY);
+            npc.moveTowardPlayer(playerX, playerY, canMoveTo);
           });
         }
 
         function checkNPCCollisions() {
           // Assume player sprite size
-          // For simplicity, let's assume the player sprite is 64x64 (adjust if needed)
           const playerWidth = playerSprite.width || 64;
           const playerHeight = playerSprite.height || 64;
 
@@ -381,6 +389,23 @@
               playerLife -= 0.5; // Adjust damage as needed
             }
           });
+        }
+
+        function handleSpeedAndLife() {
+          // If Shift is pressed, run
+          if (keys['Shift']) {
+            currentSpeed = runSpeed;
+            playerLife -= 0.1; // Lose life while running
+          } else {
+            currentSpeed = baseSpeed;
+            // Regenerate life slowly if not running (and less than max)
+            if (playerLife < 100) {
+              playerLife += 0.05;
+            }
+          }
+
+          // Ensure playerLife doesn't exceed 100
+          if (playerLife > 100) playerLife = 100;
         }
 
         function drawGameView() {
@@ -418,13 +443,14 @@
           // Draw fog of war
           ctx.drawImage(overlayCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
 
-          // Draw local player goals achievement
+          // Draw local player goals achievement and life
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(10,10,320,50);
+          ctx.fillRect(10,10,320,70);
           ctx.fillStyle = '#FFFFFF';
           ctx.font = "10px Sans-Serif";
-          ctx.fillText(`Objetivos conseguidos: ${collectedGoals} of ${totalGoals}`, 20,30);
+          ctx.fillText(`Objetivos conseguidos: ${collectedGoals} de ${totalGoals}`, 20,30);
           ctx.fillText(`Vida del jugador: ${Math.floor(playerLife)}`, 20,50);
+          ctx.fillText(`Mantén Shift para correr (consume vida), Suelta para regenerar.`, 20,70);
 
           // Update scoreboard with all players (local + others)
           drawScoreboard();
