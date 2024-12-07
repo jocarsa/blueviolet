@@ -64,8 +64,7 @@
 
         let colorGoals = []; // {x, y, w, h, colorName, collected:false}
 
-        // Create a collision map based on the low-res data
-        // 1 = collidable (outside), 0 = walkable (inside)
+        // Create a collision map
         const collisionMap = [];
         for (let y = 0; y < img.height; y++) {
           const row = [];
@@ -100,10 +99,37 @@
 
         const playerSprite = new Image();
         playerSprite.src = 'personaje.png';
+
+        // Create overlay canvas for fog of war
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.width = highResCanvas.width;
+        overlayCanvas.height = highResCanvas.height;
+        const overlayCtx = overlayCanvas.getContext('2d');
+        // Fill overlay with semi-transparent black
+        overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        overlayCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+        function paintVisitedArea(x, y) {
+          const radius = 600;
+          // Create a radial gradient from white center to transparent edge
+          // We'll use destination-out to remove the fog in visited areas
+          const grad = overlayCtx.createRadialGradient(x, y, 0, x, y, radius);
+          grad.addColorStop(0, 'rgba(255,255,255,0.01)');
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+
+          overlayCtx.globalCompositeOperation = 'destination-out';
+          overlayCtx.fillStyle = grad;
+          overlayCtx.beginPath();
+          overlayCtx.arc(x, y, radius, 0, 2 * Math.PI);
+          overlayCtx.fill();
+          overlayCtx.globalCompositeOperation = 'source-over';
+        }
+
         playerSprite.onload = () => {
           function gameLoop() {
             updatePlayerPosition();
             checkGoalCollection();
+            paintVisitedArea(playerX, playerY); // "Carve out" visited area
             drawGameView();
             requestAnimationFrame(gameLoop);
           }
@@ -242,6 +268,11 @@
             }
           });
 
+          // Draw the overlay (fog of war)
+          // The overlay is black with transparent holes. Drawing it source-over
+          // will darken unvisited areas and show visited areas clearly.
+          ctx.drawImage(overlayCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
+
           // Draw goals achieved overlay
           const totalGoals = colorGoals.length;
           const collectedGoals = colorGoals.filter(g => g.collected).length;
@@ -267,7 +298,7 @@
               const [r, g, b] = hslToRgb(targetHue, s, l);
               imageData.data[i] = r;
               imageData.data[i + 1] = g;
-              imageData.data[i] = b;
+              imageData.data[i + 2] = b;
             }
           }
           tempCtx.putImageData(imageData, 0, 0);
@@ -342,7 +373,6 @@
               } else {
                 drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
 
-                // Walls are just visual. We won't use them for collision since that caused issues.
                 if (neighborIsOutside(x-1, y, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
                 if (neighborIsOutside(x+1, y, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
                 if (neighborIsOutside(x, y-1, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
@@ -354,7 +384,7 @@
                   highResCtx.fillStyle = `rgb(${r},${g},${b})`;
                   highResCtx.fillRect(x * scaleFactor, y * scaleFactor, scaleFactor, scaleFactor);
                   colorGoals.push({
-                    x: x * scaleFactor, 
+                    x: x * scaleFactor,
                     y: y * scaleFactor,
                     w: scaleFactor,
                     h: scaleFactor,
@@ -382,7 +412,7 @@
         }
 
         function drawFloor(ctx, x, y, size) {
-          ctx.fillStyle = '#BDC3C7'; 
+          ctx.fillStyle = '#BDC3C7';
           ctx.fillRect(x, y, size, size);
           ctx.strokeStyle = '#95A5A6';
           ctx.strokeRect(x, y, size, size);
