@@ -1,5 +1,5 @@
 <?php
-$anchura = 64;
+$anchura = 128;
 $padding = (int)($anchura * 0.1); // 10% padding on all sides
 
 // Create a blank 256x256 image

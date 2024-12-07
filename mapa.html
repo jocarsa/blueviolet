@@ -88,6 +88,13 @@
       const winnerOverlay = document.getElementById('winnerOverlay');
       const winnerMessage = document.getElementById('winnerMessage');
 
+      // Declare variables for map and context here
+      let highResCanvas;
+      let highResCtx;
+      let collisionMap = [];
+      let playerX, playerY;
+      let overlayCanvas, overlayCtx;
+
       // NPC Class
       class NPC {
         constructor(x, y, speed, color) {
@@ -137,17 +144,12 @@
         }
       }
 
-      // Initialize some NPCs
-      let npcs = [
-        new NPC(100, 100, 1, '#00FF00'),
-        new NPC(200, 300, 1.5, '#FF00FF'),
-        new NPC(500, 500, 0.8, '#FFFF00')
-      ];
+      let npcs = []; // Will initialize after map load
 
       img.onload = () => {
         const scaleFactor = 64;
-        const highResCanvas = document.createElement('canvas');
-        const highResCtx = highResCanvas.getContext('2d');
+        highResCanvas = document.createElement('canvas');
+        highResCtx = highResCanvas.getContext('2d');
 
         ctx.drawImage(img, 0, 0);
         const lowResData = ctx.getImageData(0, 0, img.width, img.height);
@@ -167,7 +169,7 @@
         let colorGoals = [];
 
         // Create a collision map
-        const collisionMap = [];
+        collisionMap = [];
         for (let y = 0; y < img.height; y++) {
           const row = [];
           for (let x = 0; x < img.width; x++) {
@@ -184,8 +186,16 @@
         drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoals);
         totalGoals = colorGoals.length;
 
-        let playerX = highResCanvas.width / 2;
-        let playerY = highResCanvas.height / 2;
+        playerX = highResCanvas.width / 2;
+        playerY = highResCanvas.height / 2;
+
+        // Initialize NPCs near the player so we can see them
+        npcs = [
+          new NPC(playerX + 100, playerY + 100, 1, '#00FF00'),
+          new NPC(playerX + 200, playerY + 300, 1.5, '#FF00FF'),
+          new NPC(playerX + 500, playerY - 500, 0.8, '#FFFF00')
+        ];
+
         let lastSentX = playerX;
         let lastSentY = playerY;
 
@@ -204,10 +214,10 @@
         const playerSprite = new Image();
         playerSprite.src = 'personaje.png';
 
-        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas = document.createElement('canvas');
         overlayCanvas.width = highResCanvas.width;
         overlayCanvas.height = highResCanvas.height;
-        const overlayCtx = overlayCanvas.getContext('2d');
+        overlayCtx = overlayCanvas.getContext('2d');
         overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         overlayCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
@@ -245,7 +255,7 @@
           requestAnimationFrame(gameLoop);
         };
 
-        // Periodically fetch other players’ data (including their achievements)
+        // Periodically fetch other players’ data
         setInterval(async () => {
           const {players, winnerId: wId} = await getOtherPlayersPositions();
           winnerId = wId; // Store the winner ID
@@ -288,7 +298,7 @@
 
         }, 1000);
 
-        // Send player data (including achievements) to server every second if moved or goals changed
+        // Send player data to server periodically
         setInterval(() => {
           if (playerX !== lastSentX || playerY !== lastSentY || allGoalsCollected) {
             sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals);
@@ -348,7 +358,6 @@
           if (keys['a'] || keys['ArrowLeft']) nextX -= currentSpeed;
           if (keys['d'] || keys['ArrowRight']) nextX += currentSpeed;
 
-          // Check collisions
           if (canMoveTo(nextX, playerY)) {
             playerX = nextX;
           }
@@ -379,7 +388,6 @@
         }
 
         function checkNPCCollisions() {
-          // Assume player sprite size
           const playerWidth = playerSprite.width || 64;
           const playerHeight = playerSprite.height || 64;
 
@@ -423,6 +431,7 @@
             npc.draw(ctx, offsetX, offsetY);
           });
 
+          // Draw player
           if (playerSprite.width > 0 && playerSprite.height > 0) {
             drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
           }
@@ -445,17 +454,15 @@
 
           // Draw local player goals achievement and life
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(10,10,320,70);
+          ctx.fillRect(10,10,380,80);
           ctx.fillStyle = '#FFFFFF';
           ctx.font = "10px Sans-Serif";
-          ctx.fillText(`Objetivos conseguidos: ${collectedGoals} de ${totalGoals}`, 20,30);
+          ctx.fillText(`Objetivos conseguidos: ${collectedGoals} of ${totalGoals}`, 20,30);
           ctx.fillText(`Vida del jugador: ${Math.floor(playerLife)}`, 20,50);
-          ctx.fillText(`Mantén Shift para correr (consume vida), Suelta para regenerar.`, 20,70);
+          ctx.fillText(`Mantén Shift para correr (consume vida), suelta para regenerar.`, 20,70);
 
-          // Update scoreboard with all players (local + others)
+          // Update scoreboard
           drawScoreboard();
-
-          // If there is a winner, the overlay and message are shown via CSS, already handled above
         }
 
         function drawScoreboard() {
@@ -485,7 +492,7 @@
               const [r, g, b] = hslToRgb(targetHue, s, l);
               imageData.data[i] = r;
               imageData.data[i + 1] = g;
-              imageData.data[i + 2] = b;
+              imageData.data[i] = b;
             }
           }
           tempCtx.putImageData(imageData, 0, 0);
