@@ -44,12 +44,38 @@
       color: #00FF00;
       display:none;
     }
+
+    /* Chat input styling */
+    .chat-container {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      background: rgba(0,0,0,0.5);
+      padding: 5px;
+    }
+
+    .chat-input {
+      width: 100%;
+      padding: 10px;
+      font-size: 14px;
+      border: none;
+      outline: none;
+      background: #333;
+      color: #fff;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
   <div class="scoreboard" id="scoreboard"></div>
   <div class="winnerOverlay" id="winnerOverlay"></div>
   <div class="winnerMessage" id="winnerMessage">Ganador: </div>
+
+  <div class="chat-container">
+    <input type="text" class="chat-input" id="chatInput" placeholder="Presiona Enter para enviar mensaje...">
+  </div>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -87,6 +113,12 @@
       const scoreboardDiv = document.getElementById('scoreboard');
       const winnerOverlay = document.getElementById('winnerOverlay');
       const winnerMessage = document.getElementById('winnerMessage');
+
+      const chatInput = document.getElementById('chatInput');
+
+      // Player message tracking
+      let lastMessage = '';
+      let lastMessageTime = 0; // store timestamp when message is sent
 
       // Declare variables for map and context here
       let highResCanvas;
@@ -191,9 +223,9 @@
 
         // Initialize NPCs near the player so we can see them
         npcs = [
-          new NPC(playerX + 100, playerY + 100, 1, '#00FF00'),
-          new NPC(playerX + 200, playerY + 300, 1.5, '#FF00FF'),
-          new NPC(playerX + 500, playerY - 500, 0.8, '#FFFF00')
+          new NPC(playerX + 100, playerY + 100, 0.11, '#00FF00'),
+          new NPC(playerX + 200, playerY + 300, 0.2, '#FF00FF'),
+          new NPC(playerX + 500, playerY - 500, 0.3, '#FFFF00')
         ];
 
         let lastSentX = playerX;
@@ -255,6 +287,20 @@
           requestAnimationFrame(gameLoop);
         };
 
+        // Add event listener to send message on Enter
+        chatInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (chatInput.value.trim() !== '') {
+              lastMessage = chatInput.value.trim();
+              lastMessageTime = Date.now();
+              chatInput.value = '';
+              // Send message to server immediately
+              sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals, lastMessage);
+            }
+          }
+        });
+
         // Periodically fetch other players’ data
         setInterval(async () => {
           const {players, winnerId: wId} = await getOtherPlayersPositions();
@@ -271,7 +317,9 @@
                   lastUpdate: Date.now(),
                   username: player.username,
                   achievedGoals: player.achievedGoals,
-                  totalGoals: player.totalGoals
+                  totalGoals: player.totalGoals,
+                  lastMessage: player.lastMessage || '',
+                  lastMessageTime: player.lastMessageTime || 0
                 };
               } else {
                 otherPlayersData[player.id].prevX = otherPlayersData[player.id].x;
@@ -283,7 +331,11 @@
                 otherPlayersData[player.id].username = player.username;
                 otherPlayersData[player.id].achievedGoals = player.achievedGoals;
                 otherPlayersData[player.id].totalGoals = player.totalGoals;
+                otherPlayersData[player.id].lastMessage = player.lastMessage || '';
+                otherPlayersData[player.id].lastMessageTime = player.lastMessageTime || 0;
               }
+            } else {
+              // For our player, update winner if needed, etc.
             }
           });
 
@@ -301,13 +353,13 @@
         // Send player data to server periodically
         setInterval(() => {
           if (playerX !== lastSentX || playerY !== lastSentY || allGoalsCollected) {
-            sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals);
+            sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals, lastMessage);
             lastSentX = playerX;
             lastSentY = playerY;
           }
         }, 1000);
 
-        function sendPlayerPosition(x, y, color, achievedGoals, totalGoals) {
+        function sendPlayerPosition(x, y, color, achievedGoals, totalGoals, message='') {
           fetch('endpoint/multi.php', {
             method: 'POST',
             headers: {
@@ -320,7 +372,9 @@
               color: color, 
               username: username,
               achievedGoals: achievedGoals,
-              totalGoals: totalGoals
+              totalGoals: totalGoals,
+              lastMessage: message,
+              lastMessageTime: Date.now()
             }),
           }).catch(error => console.error('Error sending player data:', error));
         }
@@ -434,6 +488,7 @@
           // Draw player
           if (playerSprite.width > 0 && playerSprite.height > 0) {
             drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
+            drawSpeechBubble(ctx, lastMessage, lastMessageTime, canvas.width / 2, canvas.height / 2 - playerSprite.height / 2);
           }
 
           // Draw other players
@@ -446,6 +501,7 @@
             const otherPlayerY = interpolatedY - offsetY;
             if (playerSprite.width > 0 && playerSprite.height > 0) {
               drawPlayerSprite(ctx, playerSprite, otherPlayerX, otherPlayerY, player.color || '#00FF00', player.username);
+              drawSpeechBubble(ctx, player.lastMessage, player.lastMessageTime, otherPlayerX, otherPlayerY - playerSprite.height / 2);
             }
           });
 
@@ -492,7 +548,7 @@
               const [r, g, b] = hslToRgb(targetHue, s, l);
               imageData.data[i] = r;
               imageData.data[i + 1] = g;
-              imageData.data[i] = b;
+              imageData.data[i + 2] = b;
             }
           }
           tempCtx.putImageData(imageData, 0, 0);
@@ -501,6 +557,56 @@
           ctx.fillStyle = '#FFFFFF';
           ctx.font = "40px Sans-serif";
           ctx.fillText(username, x - sprite.width / 2, y - sprite.height / 2 - 10);
+        }
+
+        function drawSpeechBubble(ctx, message, messageTime, x, y) {
+          if (!message || message.trim() === '') return;
+          const elapsed = Date.now() - messageTime;
+          if (elapsed > 5000) return; // Show message for 5 seconds
+
+          ctx.font = "20px Sans-serif";
+          const padding = 10;
+          const textMetrics = ctx.measureText(message);
+          const textWidth = textMetrics.width;
+          const textHeight = 20; 
+          const bubbleWidth = textWidth + padding * 2;
+          const bubbleHeight = textHeight + padding * 2;
+
+          // Draw bubble
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.strokeStyle = '#FFFFFF';
+
+          // Draw rounded rect
+          const radius = 10;
+          let bubbleX = x - bubbleWidth/2;
+          let bubbleY = y - bubbleHeight - 40; // 40px above head
+
+          ctx.beginPath();
+          ctx.moveTo(bubbleX + radius, bubbleY);
+          ctx.lineTo(bubbleX + bubbleWidth - radius, bubbleY);
+          ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + radius);
+          ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - radius);
+          ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight, bubbleX + bubbleWidth - radius, bubbleY + bubbleHeight);
+          ctx.lineTo(bubbleX + radius, bubbleY + bubbleHeight);
+          ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight, bubbleX, bubbleY + bubbleHeight - radius);
+          ctx.lineTo(bubbleX, bubbleY + radius);
+          ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + radius, bubbleY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw small triangle (tail)
+          ctx.beginPath();
+          ctx.moveTo(x - 10, y - 40); // tail base left
+          ctx.lineTo(x + 10, y - 40); // tail base right
+          ctx.lineTo(x, y - 30); // tail tip
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Draw text
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(message, bubbleX + padding, bubbleY + padding + textHeight/2);
         }
 
         function getHueFromColor(color) {

@@ -4,10 +4,8 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Use a file to save player positions and winner info
 define('POSITIONS_FILE', 'player_positions.json');
 
-// Set default timezone
 date_default_timezone_set('UTC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -22,10 +20,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = $data['username'];
         $achievedGoals = isset($data['achievedGoals']) ? (int)$data['achievedGoals'] : 0;
         $totalGoals = isset($data['totalGoals']) ? (int)$data['totalGoals'] : 0;
+        $lastMessage = isset($data['lastMessage']) ? $data['lastMessage'] : '';
+        $lastMessageTime = isset($data['lastMessageTime']) ? (int)$data['lastMessageTime'] : 0;
 
         $gameData = getGameData();
 
-        // Update player data
+        // Update or create player data
         $gameData['players'][$playerId] = [
             'id' => $playerId,
             'x' => $x,
@@ -34,12 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'username' => $username,
             'achievedGoals' => $achievedGoals,
             'totalGoals' => $totalGoals,
+            'lastMessage' => $lastMessage,
+            'lastMessageTime' => $lastMessageTime,
             'timestamp' => time()
         ];
 
         // Check for winner if not already set
         if ($gameData['winnerId'] === null && $totalGoals > 0 && $achievedGoals === $totalGoals) {
-            // This player achieved all goals. If no winner yet, declare this player the winner.
             $gameData['winnerId'] = $playerId;
         }
 
@@ -52,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $recentPositions = [];
     foreach ($gameData['players'] as $playerId => $playerData) {
+        // Include players updated in the last second
         if ($currentTimestamp - $playerData['timestamp'] <= 1) {
             $recentPositions[] = $playerData;
         }
@@ -64,12 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 }
 
-// Function to get game data with winner info and players
 function getGameData() {
     if (file_exists(POSITIONS_FILE)) {
         $data = json_decode(file_get_contents(POSITIONS_FILE), true);
         if (!is_array($data)) {
-            $data = ['winnerId'=>null, 'players'=>[]];
+            $data = ['winnerId' => null, 'players' => []];
         } else {
             if (!isset($data['winnerId'])) {
                 $data['winnerId'] = null;
@@ -79,9 +80,8 @@ function getGameData() {
             }
         }
     } else {
-        $data = ['winnerId'=>null, 'players'=>[]];
+        $data = ['winnerId' => null, 'players' => []];
     }
     return $data;
 }
-?>
 
