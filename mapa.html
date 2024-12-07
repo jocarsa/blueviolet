@@ -80,10 +80,65 @@
       let collectedGoals = 0;
       let allGoalsCollected = false;
 
+      // Player life
+      let playerLife = 100; // Start with some life
+
       let winnerId = null; // Will be set when we know there's a winner
       const scoreboardDiv = document.getElementById('scoreboard');
       const winnerOverlay = document.getElementById('winnerOverlay');
       const winnerMessage = document.getElementById('winnerMessage');
+
+      // NPC Class
+      class NPC {
+        constructor(x, y, speed, color) {
+          this.x = x;
+          this.y = y;
+          this.speed = speed;
+          this.color = color;
+          this.size = 20; // NPC size for collision
+        }
+
+        moveTowardPlayer(playerX, playerY) {
+          const dx = playerX - this.x;
+          const dy = playerY - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0) {
+            this.x += (dx / dist) * this.speed;
+            this.y += (dy / dist) * this.speed;
+          }
+        }
+
+        draw(ctx, offsetX, offsetY) {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(this.x - offsetX, this.y - offsetY, this.size/2, 0, Math.PI*2);
+          ctx.fill();
+        }
+
+        checkCollisionWithPlayer(px, py, playerWidth, playerHeight) {
+          // Simple bounding box collision
+          // Player is drawn centered. Let's assume sprite is playerWidth x playerHeight
+          // Player center: px, py
+          const playerLeft = px - playerWidth/2;
+          const playerRight = px + playerWidth/2;
+          const playerTop = py - playerHeight/2;
+          const playerBottom = py + playerHeight/2;
+
+          const npcLeft = this.x - this.size/2;
+          const npcRight = this.x + this.size/2;
+          const npcTop = this.y - this.size/2;
+          const npcBottom = this.y + this.size/2;
+
+          return !(npcRight < playerLeft || npcLeft > playerRight || npcBottom < playerTop || npcTop > playerBottom);
+        }
+      }
+
+      // Initialize some NPCs
+      let npcs = [
+        new NPC(100, 100, 1, '#00FF00'),
+        new NPC(200, 300, 1.5, '#FF00FF'),
+        new NPC(500, 500, 0.8, '#FFFF00')
+      ];
 
       img.onload = () => {
         const scaleFactor = 64;
@@ -169,9 +224,15 @@
           function gameLoop() {
             updatePlayerPosition();
             checkGoalCollection();
+            moveNPCs();
+            checkNPCCollisions();
             paintVisitedArea(playerX, playerY);
             drawGameView();
-            requestAnimationFrame(gameLoop);
+            if (playerLife <= 0) {
+              restartGame();
+            } else {
+              requestAnimationFrame(gameLoop);
+            }
           }
           requestAnimationFrame(gameLoop);
         };
@@ -302,6 +363,26 @@
           }
         }
 
+        function moveNPCs() {
+          npcs.forEach(npc => {
+            npc.moveTowardPlayer(playerX, playerY);
+          });
+        }
+
+        function checkNPCCollisions() {
+          // Assume player sprite size
+          // For simplicity, let's assume the player sprite is 64x64 (adjust if needed)
+          const playerWidth = playerSprite.width || 64;
+          const playerHeight = playerSprite.height || 64;
+
+          npcs.forEach(npc => {
+            if (npc.checkCollisionWithPlayer(playerX, playerY, playerWidth, playerHeight)) {
+              // Reduce player life
+              playerLife -= 0.5; // Adjust damage as needed
+            }
+          });
+        }
+
         function drawGameView() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -311,6 +392,11 @@
           const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
 
           ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
+
+          // Draw NPCs
+          npcs.forEach(npc => {
+            npc.draw(ctx, offsetX, offsetY);
+          });
 
           if (playerSprite.width > 0 && playerSprite.height > 0) {
             drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
@@ -334,10 +420,11 @@
 
           // Draw local player goals achievement
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(10,10,220,30);
+          ctx.fillRect(10,10,320,50);
           ctx.fillStyle = '#FFFFFF';
           ctx.font = "10px Sans-Serif";
           ctx.fillText(`Objetivos conseguidos: ${collectedGoals} of ${totalGoals}`, 20,30);
+          ctx.fillText(`Vida del jugador: ${Math.floor(playerLife)}`, 20,50);
 
           // Update scoreboard with all players (local + others)
           drawScoreboard();
@@ -348,7 +435,7 @@
         function drawScoreboard() {
           let scoreboardHTML = `<strong>Marcador</strong><br>`;
           // Local player
-          scoreboardHTML += `${username} (Tú): ${collectedGoals}/${totalGoals}<br>`;
+          scoreboardHTML += `${username} (Tú): ${collectedGoals}/${totalGoals} | Vida: ${Math.floor(playerLife)}<br>`;
           // Other players
           for (const pId in otherPlayersData) {
             const p = otherPlayersData[pId];
@@ -508,6 +595,11 @@
               ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
               break;
           }
+        }
+
+        function restartGame() {
+          // Simple approach: reload the page
+          location.reload();
         }
 
       };
