@@ -1,5 +1,7 @@
 <?php
-$anchura = 256;
+$anchura = 64;
+$padding = (int)($anchura * 0.1); // 10% padding on all sides
+
 // Create a blank 256x256 image
 $image = imagecreatetruecolor($anchura, $anchura);
 
@@ -18,19 +20,22 @@ $rooms = [];
 
 // Generate random rooms
 for ($i = 0; $i < $roomCount; $i++) {
-    $roomX = rand(10, $anchura - 10);
-    $roomY = rand(10, $anchura - 10);
+    // Determine width and height first
     $roomWidth = rand($anchura / 20, $anchura / 5);
     $roomHeight = rand($anchura / 20, $anchura / 5);
-
-    // Ensure the room fits within the bounds of the image
-    if ($roomX + $roomWidth >= $anchura) {
-        $roomWidth = $anchura - $roomX - 1;
-    }
-    if ($roomY + $roomHeight >= $anchura) {
-        $roomHeight = $anchura - $roomY - 1;
-    }
     
+    // Ensure the room fits within the padded area
+    $maxX = $anchura - $padding - $roomWidth;
+    $maxY = $anchura - $padding - $roomHeight;
+    
+    // If the generated constraints are negative (very large rooms), skip room
+    if ($maxX <= $padding || $maxY <= $padding) {
+        continue;
+    }
+
+    $roomX = rand($padding, $maxX);
+    $roomY = rand($padding, $maxY);
+
     // Draw the random room
     imagefilledrectangle(
         $image,
@@ -84,7 +89,7 @@ imagesetthickness($image, $corridorThickness);
 
 // Sort rooms by their center, for a predictable corridor path (optional)
 usort($rooms, function($a, $b) {
-    return $a['centerX'] + $a['centerY'] <=> $b['centerX'] + $b['centerY'];
+    return ($a['centerX'] + $a['centerY']) <=> ($b['centerX'] + $b['centerY']);
 });
 
 for ($i = 1; $i < count($rooms); $i++) {
@@ -108,7 +113,7 @@ for ($i = 1; $i < count($rooms); $i++) {
     );
 }
 
-// Now, allocate the additional colors for single pixels
+// Now, allocate the additional colors for single pixels (collectibles)
 $redColor    = imagecolorallocate($image, 255, 0, 0);
 $greenColor  = imagecolorallocate($image, 0, 255, 0);
 $blueColor   = imagecolorallocate($image, 0, 0, 255);
