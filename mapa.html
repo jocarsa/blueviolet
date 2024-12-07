@@ -7,6 +7,7 @@
       margin: 0;
       overflow: hidden;
       background: #000;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
@@ -16,12 +17,12 @@
 <body>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      // Get the image and color parameters from the URL
+      // Get parameters from URL
       const urlParams = new URLSearchParams(window.location.search);
       const imageName = urlParams.get('image');
-      const playerColor = urlParams.get('color') || '#FF0000'; // Default color is red if not specified
-      const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo purposes
-      const username = urlParams.get('username');
+      const playerColor = urlParams.get('color') || '#FF0000'; // Default color red
+      const playerId = Math.floor(Math.random() * 10000); // Random player ID for demo
+      const username = urlParams.get('username') || 'Player';
       
       if (imageName) {
         const lowResMapUrl = `endpoint/mapas/${imageName}`;
@@ -38,36 +39,37 @@
         const img = new Image();
         img.src = lowResMapUrl;
         img.onload = () => {
-          // Prepare the high-resolution map canvas
           const scaleFactor = 64;
           const highResCanvas = document.createElement('canvas');
-          highResCanvas.width = img.width * scaleFactor;
-          highResCanvas.height = img.height * scaleFactor;
           const highResCtx = highResCanvas.getContext('2d');
 
-          // Draw and process the map to create the high-resolution version
-          drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx);
+          // Draw low-res image to temporary context
+          ctx.drawImage(img, 0, 0);
+          const lowResData = ctx.getImageData(0, 0, img.width, img.height);
 
-          // Load player sprite
-          const playerSprite = new Image();
-          playerSprite.src = 'personaje.png';
-          playerSprite.onload = () => {
-            // Game loop
-            function gameLoop() {
-              updatePlayerPosition();
-              drawGameView();
-              requestAnimationFrame(gameLoop);
-            }
-            requestAnimationFrame(gameLoop);
-          };
+          highResCanvas.width = img.width * scaleFactor;
+          highResCanvas.height = img.height * scaleFactor;
+          
+          // Define special collectible colors (in RGB)
+          const collectibleColors = [
+            {name: 'red',     r:255,g:0,  b:0},
+            {name: 'green',   r:0,  g:255,b:0},
+            {name: 'blue',    r:0,  g:0,  b:255},
+            {name: 'yellow',  r:255,g:255,b:0},
+            {name: 'magenta', r:255,g:0,  b:255},
+            {name: 'cyan',    r:0,  g:255,b:255}
+          ];
 
-          // Game logic variables
+          let colorGoals = []; // Store {x, y, w, h, colorName, collected:false}
+
+          drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoals);
+
+          // Player setup
           let playerX = highResCanvas.width / 2;
           let playerY = highResCanvas.height / 2;
-          const playerSize = 10;
           const speed = 2;
 
-          // Handle keyboard input
+          // Keyboard input
           const keys = {};
           window.addEventListener('keydown', (e) => {
             keys[e.key] = true;
@@ -76,7 +78,20 @@
             keys[e.key] = false;
           });
 
-          // Fetch other players' positions every second
+          // Load player sprite
+          const playerSprite = new Image();
+          playerSprite.src = 'personaje.png';
+          playerSprite.onload = () => {
+            // Game loop
+            function gameLoop() {
+              updatePlayerPosition();
+              checkGoalCollection();
+              drawGameView();
+              requestAnimationFrame(gameLoop);
+            }
+            requestAnimationFrame(gameLoop);
+          };
+
           let otherPlayersData = {};
           setInterval(async () => {
             const newPlayersData = await getOtherPlayersPositions();
@@ -105,60 +120,7 @@
             });
           }, 1000);
 
-          // Update player position and send to server
-          function updatePlayerPosition() {
-            let nextX = playerX;
-            let nextY = playerY;
-
-            if (keys['w'] || keys['ArrowUp']) nextY -= speed;
-            if (keys['s'] || keys['ArrowDown']) nextY += speed;
-            if (keys['a'] || keys['ArrowLeft']) nextX -= speed;
-            if (keys['d'] || keys['ArrowRight']) nextX += speed;
-
-            // Check collisions with walls
-            if (!isCollidingWithWall(nextX, playerY)) {
-              playerX = nextX;
-            }
-            if (!isCollidingWithWall(playerX, nextY)) {
-              playerY = nextY;
-            }
-
-            // Send player position to server every second
-            if (Date.now() % 1000 < 50) {
-              sendPlayerPosition(playerX, playerY, playerColor);
-            }
-          }
-
-          function drawGameView() {
-            // Clear the visible canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Determine what part of the map to render based on player position
-            const viewWidth = canvas.width;
-            const viewHeight = canvas.height;
-            const offsetX = Math.max(0, Math.min(highResCanvas.width - viewWidth, playerX - viewWidth / 2));
-            const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
-            ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
-
-            // Draw the player at the center of the visible canvas
-            if (playerSprite.width > 0 && playerSprite.height > 0) {
-              drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
-            }
-
-            // Draw other players with interpolation
-            const currentTime = Date.now();
-            Object.values(otherPlayersData).forEach(player => {
-              const progress = Math.min(1, (currentTime - player.lastUpdate) / 1000);
-              const interpolatedX = player.prevX + (player.x - player.prevX) * progress;
-              const interpolatedY = player.prevY + (player.y - player.prevY) * progress;
-              const otherPlayerX = interpolatedX - offsetX;
-              const otherPlayerY = interpolatedY - offsetY;
-              if (playerSprite.width > 0 && playerSprite.height > 0) {
-                drawPlayerSprite(ctx, playerSprite, otherPlayerX, otherPlayerY, player.color || '#00FF00', player.username);
-              }
-            });
-          }
-
+          // Send player position to server
           function sendPlayerPosition(x, y, color) {
             fetch('endpoint/multi.php', {
               method: 'POST',
@@ -184,31 +146,80 @@
             }
           }
 
-          function drawHighResMap(ctx, img, scaleFactor, highResCanvas, highResCtx) {
-            // Draw low-resolution image onto a canvas
-            ctx.drawImage(img, 0, 0);
-            const lowResData = ctx.getImageData(0, 0, img.width, img.height);
+          function updatePlayerPosition() {
+            let nextX = playerX;
+            let nextY = playerY;
 
-            // Create the high-resolution map on highResCanvas
-            for (let y = 0; y < img.height; y++) {
-              for (let x = 0; x < img.width; x++) {
-                const index = (y * img.width + x) * 4;
-                const r = lowResData.data[index];
-                const g = lowResData.data[index + 1];
-                const b = lowResData.data[index + 2];
+            if (keys['w'] || keys['ArrowUp']) nextY -= speed;
+            if (keys['s'] || keys['ArrowDown']) nextY += speed;
+            if (keys['a'] || keys['ArrowLeft']) nextX -= speed;
+            if (keys['d'] || keys['ArrowRight']) nextX += speed;
 
-                if (r === 255 && g === 255 && b === 255) {
-                  drawTerrain(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
-                } else if (r === 0 && g === 0 && b === 0) {
-                  drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
-                  // Check neighbors to draw walls
-                  if (isWhite(lowResData, x - 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
-                  if (isWhite(lowResData, x + 1, y, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
-                  if (isWhite(lowResData, x, y - 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
-                  if (isWhite(lowResData, x, y + 1, img.width)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
+            // Check collisions with outside (white)
+            if (!isOutsideTile(nextX, playerY, scaleFactor, lowResData, img.width, img.height)) {
+              playerX = nextX;
+            }
+            if (!isOutsideTile(playerX, nextY, scaleFactor, lowResData, img.width, img.height)) {
+              playerY = nextY;
+            }
+
+            // Send player position periodically
+            if (Date.now() % 1000 < 50) {
+              sendPlayerPosition(playerX, playerY, playerColor);
+            }
+          }
+
+          function checkGoalCollection() {
+            // Check if player is on any collectible tile
+            for (let goal of colorGoals) {
+              if (!goal.collected) {
+                // Check player's position relative to goal's tile area
+                if (playerX >= goal.x && playerX < goal.x + goal.w &&
+                    playerY >= goal.y && playerY < goal.y + goal.h) {
+                  // Player has collected this goal
+                  goal.collected = true;
                 }
               }
             }
+          }
+
+          function drawGameView() {
+            // Clear the visible canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Determine what part of the map to render
+            const viewWidth = canvas.width;
+            const viewHeight = canvas.height;
+            const offsetX = Math.max(0, Math.min(highResCanvas.width - viewWidth, playerX - viewWidth / 2));
+            const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
+
+            ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
+
+            // Draw the player
+            if (playerSprite.width > 0 && playerSprite.height > 0) {
+              drawPlayerSprite(ctx, playerSprite, canvas.width / 2, canvas.height / 2, playerColor, username);
+            }
+
+            // Draw other players
+            const currentTime = Date.now();
+            Object.values(otherPlayersData).forEach(player => {
+              const progress = Math.min(1, (currentTime - player.lastUpdate) / 1000);
+              const interpolatedX = player.prevX + (player.x - player.prevX) * progress;
+              const interpolatedY = player.prevY + (player.y - player.prevY) * progress;
+              const otherPlayerX = interpolatedX - offsetX;
+              const otherPlayerY = interpolatedY - offsetY;
+              if (playerSprite.width > 0 && playerSprite.height > 0) {
+                drawPlayerSprite(ctx, playerSprite, otherPlayerX, otherPlayerY, player.color || '#00FF00', player.username);
+              }
+            });
+
+            // Draw goals achieved overlay
+            const totalGoals = colorGoals.length;
+            const collectedGoals = colorGoals.filter(g => g.collected).length;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(10,10,200,30);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(`Goals achieved: ${collectedGoals} of ${totalGoals}`, 20,30);
           }
 
           function drawPlayerSprite(ctx, sprite, x, y, color, username) {
@@ -218,11 +229,11 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(sprite, 0, 0);
 
-            // Change the hue of the sprite to match the player color
+            // Change hue of the sprite
             const imageData = tempCtx.getImageData(0, 0, sprite.width, sprite.height);
             const targetHue = getHueFromColor(color);
             for (let i = 0; i < imageData.data.length; i += 4) {
-              if (imageData.data[i + 3] > 0) { // Only adjust pixels that are not fully transparent
+              if (imageData.data[i + 3] > 0) {
                 const [h, s, l] = rgbToHsl(imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]);
                 const [r, g, b] = hslToRgb(targetHue, s, l);
                 imageData.data[i] = r;
@@ -233,7 +244,7 @@
             tempCtx.putImageData(imageData, 0, 0);
 
             ctx.drawImage(tempCanvas, x - sprite.width / 2, y - sprite.height / 2);
-            ctx.fillStyle = '#FFFFFF'; // Set text color to white
+            ctx.fillStyle = '#FFFFFF'; 
             ctx.fillText(username, x - sprite.width / 2, y - sprite.height / 2 - 10);
           }
 
@@ -246,15 +257,12 @@
           }
 
           function rgbToHsl(r, g, b) {
-            r /= 255;
-            g /= 255;
-            b /= 255;
-            const max = Math.max(r, g, b);
-            const min = Math.min(r, g, b);
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
             let h, s, l = (max + min) / 2;
 
             if (max === min) {
-              h = s = 0; // achromatic
+              h = s = 0;
             } else {
               const d = max - min;
               s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -265,88 +273,131 @@
               }
               h /= 6;
             }
-
             return [h * 360, s, l];
           }
 
           function hslToRgb(h, s, l) {
-            let r, g, b;
-
             h /= 360;
+            let r, g, b;
             if (s === 0) {
-              r = g = b = l; // achromatic
+              r = g = b = l;
             } else {
               const hue2rgb = (p, q, t) => {
                 if (t < 0) t += 1;
                 if (t > 1) t -= 1;
-                if (t < 1 / 6) return p + (q - p) * 6 * t;
-                if (t < 1 / 2) return q;
-                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
                 return p;
               };
-
               const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
               const p = 2 * l - q;
-              r = hue2rgb(p, q, h + 1 / 3);
+              r = hue2rgb(p, q, h + 1/3);
               g = hue2rgb(p, q, h);
-              b = hue2rgb(p, q, h - 1 / 3);
+              b = hue2rgb(p, q, h - 1/3);
             }
-
             return [r * 255, g * 255, b * 255];
           }
 
-          function isCollidingWithWall(x, y) {
+          // Check if tile is outside (white)
+          function isOutsideTile(x, y, scaleFactor, lowResData, width, height) {
             const scaledX = Math.floor(x / scaleFactor);
             const scaledY = Math.floor(y / scaleFactor);
-            if (scaledX < 0 || scaledY < 0 || scaledX >= highResCanvas.width / scaleFactor || scaledY >= highResCanvas.height / scaleFactor) {
-              return true;
-            }
-            const pixelData = highResCtx.getImageData(scaledX * scaleFactor, scaledY * scaleFactor, 1, 1).data;
-            return pixelData[0] === 44 && pixelData[1] === 62 && pixelData[2] === 80; // Wall color (dark blue/gray)
+            if (scaledX < 0 || scaledY < 0 || scaledX >= width || scaledY >= height) return true;
+            const index = (scaledY * width + scaledX) * 4;
+            const r = lowResData.data[index];
+            const g = lowResData.data[index + 1];
+            const b = lowResData.data[index + 2];
+            // White is outside
+            return (r === 255 && g === 255 && b === 255);
           }
+
+          function drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoals) {
+            for (let y = 0; y < img.height; y++) {
+              for (let x = 0; x < img.width; x++) {
+                const index = (y * img.width + x) * 4;
+                const r = lowResData.data[index];
+                const g = lowResData.data[index+1];
+                const b = lowResData.data[index+2];
+
+                // Determine if inside or outside
+                const isWhite = (r===255 && g===255 && b===255);
+                if (isWhite) {
+                  // Outside terrain
+                  drawTerrain(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+                } else {
+                  // Inside
+                  drawFloor(highResCtx, x * scaleFactor, y * scaleFactor, scaleFactor);
+
+                  // Check for walls (if neighbor is outside)
+                  if (neighborIsOutside(x-1, y, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'left', scaleFactor);
+                  if (neighborIsOutside(x+1, y, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'right', scaleFactor);
+                  if (neighborIsOutside(x, y-1, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'top', scaleFactor);
+                  if (neighborIsOutside(x, y+1, lowResData, img.width, img.height)) drawWall(highResCtx, x * scaleFactor, y * scaleFactor, 'bottom', scaleFactor);
+
+                  // Check if this pixel is one of the special colors
+                  let matchedColor = collectibleColors.find(cc => cc.r === r && cc.g === g && cc.b === b);
+                  if (matchedColor) {
+                    // Overlay color rectangle
+                    highResCtx.fillStyle = `rgb(${r},${g},${b})`;
+                    highResCtx.fillRect(x * scaleFactor, y * scaleFactor, scaleFactor, scaleFactor);
+                    // Add to goals
+                    colorGoals.push({
+                      x: x * scaleFactor, 
+                      y: y * scaleFactor,
+                      w: scaleFactor,
+                      h: scaleFactor,
+                      colorName: matchedColor.name,
+                      collected: false
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          function neighborIsOutside(nx, ny, lowResData, width, height) {
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) return true;
+            const idx = (ny * width + nx) * 4;
+            const rr = lowResData.data[idx];
+            const gg = lowResData.data[idx+1];
+            const bb = lowResData.data[idx+2];
+            return (rr===255 && gg===255 && bb===255);
+          }
+
+          function drawTerrain(ctx, x, y, size) {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x, y, size, size);
+          }
+
+          function drawFloor(ctx, x, y, size) {
+            ctx.fillStyle = '#BDC3C7'; 
+            ctx.fillRect(x, y, size, size);
+            ctx.strokeStyle = '#95A5A6';
+            ctx.strokeRect(x, y, size, size);
+          }
+
+          function drawWall(ctx, x, y, direction, size) {
+            ctx.fillStyle = '#2C3E50';
+            switch (direction) {
+              case 'left':
+                ctx.fillRect(x, y, size / 4, size);
+                break;
+              case 'right':
+                ctx.fillRect(x + (3 * size) / 4, y, size / 4, size);
+                break;
+              case 'top':
+                ctx.fillRect(x, y, size, size / 4);
+                break;
+              case 'bottom':
+                ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
+                break;
+            }
+          }
+
         };
       }
     });
-
-    // Helper function to check if a pixel is white
-    function isWhite(imageData, x, y, width) {
-      if (x < 0 || y < 0 || x >= width || y >= imageData.height) return false;
-      const index = (y * width + x) * 4;
-      return imageData.data[index] === 255 && imageData.data[index + 1] === 255 && imageData.data[index + 2] === 255;
-    }
-
-    // Function to draw terrain
-    function drawTerrain(ctx, x, y, size) {
-      ctx.fillStyle = '#000000'; // Example terrain color (black)
-      ctx.fillRect(x, y, size, size);
-    }
-
-    // Function to draw floor tiling
-    function drawFloor(ctx, x, y, size) {
-      ctx.fillStyle = '#BDC3C7'; // Example floor color (light gray)
-      ctx.fillRect(x, y, size, size);
-      ctx.strokeStyle = '#95A5A6'; // Tile border color (darker gray)
-      ctx.strokeRect(x, y, size, size);
-    }
-
-    // Function to draw a wall
-    function drawWall(ctx, x, y, direction, size) {
-      ctx.fillStyle = '#2C3E50'; // Example wall color (dark blue/gray)
-      switch (direction) {
-        case 'left':
-          ctx.fillRect(x, y, size / 4, size);
-          break;
-        case 'right':
-          ctx.fillRect(x + (3 * size) / 4, y, size / 4, size);
-          break;
-        case 'top':
-          ctx.fillRect(x, y, size, size / 4);
-          break;
-        case 'bottom':
-          ctx.fillRect(x, y + (3 * size) / 4, size, size / 4);
-          break;
-      }
-    }
   </script>
 </body>
 </html>
