@@ -8,7 +8,7 @@
     body {
       margin: 0;
       padding: 0;
-      background: linear-gradient(to bottom right, #4F2E7F, #8A2BE2); /* gradient with BlueViolet */
+      background: linear-gradient(to bottom right, #4F2E7F, #8A2BE2);
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       color: #fff;
       display: flex;
@@ -62,7 +62,7 @@
 
     .btn {
       display: inline-block;
-      background: #8A2BE2; /* BlueViolet */
+      background: #8A2BE2;
       color: #fff;
       padding: 10px 20px;
       font-size: 0.9em;
@@ -75,13 +75,24 @@
     }
 
     .btn:hover {
-      background: #7a24c7; /* slightly darker variant of BlueViolet */
+      background: #7a24c7;
     }
 
     .info-text {
       font-size: 0.8em;
       color: #ddd;
       margin-top: 10px;
+    }
+
+    .map-preview {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .map-preview img {
+      max-width: 100%;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
 
     @media (max-width: 400px) {
@@ -110,14 +121,18 @@
 
     <div class="form-group">
       <label for="colorSelect">Selecciona un color:</label>
-      <select id="colorSelect">
-        <option value="">-- Selecciona un color --</option>
-        <option value="#ff0000">Rojo</option>
-        <option value="#0000ff">Azul</option>
-        <option value="#00ff00">Verde</option>
-        <option value="#ffff00">Amarillo</option>
-        <option value="#800080">Púrpura</option>
-      </select>
+     <select id="colorSelect">
+  <option value="">-- Selecciona un color --</option>
+  <option value="#ff0000">🔴 Rojo</option>
+  <option value="#0000ff">🔵 Azul</option>
+  <option value="#00ff00">🟢 Verde</option>
+  <option value="#ffff00">🟡 Amarillo</option>
+  <option value="#800080">🟣 Púrpura</option>
+</select>
+    </div>
+
+    <div class="map-preview" id="mapPreviewContainer" style="display:none;">
+      <img id="mapPreview" src="" alt="Vista previa del mapa seleccionado" />
     </div>
 
     <button class="btn" id="startGameButton">Iniciar el juego</button>
@@ -146,6 +161,23 @@
             option.value = imageName;
             option.textContent = imageName;
             selectElement.appendChild(option);
+          });
+
+          // Add event listener for changing map selection
+          selectElement.addEventListener('change', () => {
+            const selectedImage = selectElement.value;
+            const previewContainer = document.getElementById('mapPreviewContainer');
+            const previewImage = document.getElementById('mapPreview');
+
+            if (selectedImage) {
+              // Update the image source to show a preview
+              // Adjust the path accordingly where images are stored
+              previewImage.src = `endpoint/mapas/${encodeURIComponent(selectedImage)}`;
+              previewContainer.style.display = 'block';
+            } else {
+              previewImage.src = '';
+              previewContainer.style.display = 'none';
+            }
           });
         })
         .catch(error => {
