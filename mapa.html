@@ -45,7 +45,6 @@
       display:none;
     }
 
-    /* Chat input styling */
     .chat-container {
       position: absolute;
       bottom: 10px;
@@ -115,19 +114,28 @@
       const winnerMessage = document.getElementById('winnerMessage');
 
       const chatInput = document.getElementById('chatInput');
-
-      // Player message tracking
       let lastMessage = '';
-      let lastMessageTime = 0; // store timestamp when message is sent
+      let lastMessageTime = 0;
 
-      // Declare variables for map and context here
       let highResCanvas;
       let highResCtx;
       let collisionMap = [];
       let playerX, playerY;
       let overlayCanvas, overlayCtx;
 
-      // NPC Class
+      let npcs = []; // Will initialize after map load
+
+      const collectibleColors = [
+        {name: 'red',     r:255,g:0,  b:0},
+        {name: 'green',   r:0,  g:255,b:0},
+        {name: 'blue',    r:0,  g:0,  b:255},
+        {name: 'yellow',  r:255,g:255,b:0},
+        {name: 'magenta', r:255,g:0,  b:255},
+        {name: 'cyan',    r:0,  g:255,b:255}
+      ];
+
+      let colorGoals = []; // Will store goals and their collected state
+
       class NPC {
         constructor(x, y, speed, color) {
           this.x = x;
@@ -176,8 +184,6 @@
         }
       }
 
-      let npcs = []; // Will initialize after map load
-
       img.onload = () => {
         const scaleFactor = 64;
         highResCanvas = document.createElement('canvas');
@@ -189,18 +195,7 @@
         highResCanvas.width = img.width * scaleFactor;
         highResCanvas.height = img.height * scaleFactor;
 
-        const collectibleColors = [
-          {name: 'red',     r:255,g:0,  b:0},
-          {name: 'green',   r:0,  g:255,b:0},
-          {name: 'blue',    r:0,  g:0,  b:255},
-          {name: 'yellow',  r:255,g:255,b:0},
-          {name: 'magenta', r:255,g:0,  b:255},
-          {name: 'cyan',    r:0,  g:255,b:255}
-        ];
-
-        let colorGoals = [];
-
-        // Create a collision map
+        // Build collision map and identify goals
         collisionMap = [];
         for (let y = 0; y < img.height; y++) {
           const row = [];
@@ -221,11 +216,10 @@
         playerX = highResCanvas.width / 2;
         playerY = highResCanvas.height / 2;
 
-        // Initialize NPCs near the player so we can see them
         npcs = [
-          new NPC(playerX + 100, playerY + 100, 0.11, '#00FF00'),
-          new NPC(playerX + 200, playerY + 300, 0.2, '#FF00FF'),
-          new NPC(playerX + 500, playerY - 500, 0.3, '#FFFF00')
+          new NPC(playerX + 100, playerY + 100, 1, '#00FF00'),
+          new NPC(playerX + 200, playerY + 300, 1.5, '#FF00FF'),
+          new NPC(playerX + 500, playerY - 500, 0.8, '#FFFF00')
         ];
 
         let lastSentX = playerX;
@@ -287,7 +281,6 @@
           requestAnimationFrame(gameLoop);
         };
 
-        // Add event listener to send message on Enter
         chatInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -295,16 +288,14 @@
               lastMessage = chatInput.value.trim();
               lastMessageTime = Date.now();
               chatInput.value = '';
-              // Send message to server immediately
               sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals, lastMessage);
             }
           }
         });
 
-        // Periodically fetch other players’ data
         setInterval(async () => {
           const {players, winnerId: wId} = await getOtherPlayersPositions();
-          winnerId = wId; // Store the winner ID
+          winnerId = wId;
           players.forEach(player => {
             if (player.id !== playerId) {
               if (!otherPlayersData[player.id]) {
@@ -334,12 +325,9 @@
                 otherPlayersData[player.id].lastMessage = player.lastMessage || '';
                 otherPlayersData[player.id].lastMessageTime = player.lastMessageTime || 0;
               }
-            } else {
-              // For our player, update winner if needed, etc.
             }
           });
 
-          // If there's a winner, show the winner overlay and highlight the winner
           if (winnerId) {
             winnerOverlay.style.display = 'block';
             winnerMessage.style.display = 'block';
@@ -350,7 +338,6 @@
 
         }, 1000);
 
-        // Send player data to server periodically
         setInterval(() => {
           if (playerX !== lastSentX || playerY !== lastSentY || allGoalsCollected) {
             sendPlayerPosition(playerX, playerY, playerColor, collectedGoals, totalGoals, lastMessage);
@@ -447,26 +434,22 @@
 
           npcs.forEach(npc => {
             if (npc.checkCollisionWithPlayer(playerX, playerY, playerWidth, playerHeight)) {
-              // Reduce player life
-              playerLife -= 0.5; // Adjust damage as needed
+              playerLife -= 0.5;
             }
           });
         }
 
         function handleSpeedAndLife() {
-          // If Shift is pressed, run
           if (keys['Shift']) {
             currentSpeed = runSpeed;
-            playerLife -= 0.1; // Lose life while running
+            playerLife -= 0.1; 
           } else {
             currentSpeed = baseSpeed;
-            // Regenerate life slowly if not running (and less than max)
             if (playerLife < 100) {
               playerLife += 0.05;
             }
           }
 
-          // Ensure playerLife doesn't exceed 100
           if (playerLife > 100) playerLife = 100;
         }
 
@@ -479,6 +462,16 @@
           const offsetY = Math.max(0, Math.min(highResCanvas.height - viewHeight, playerY - viewHeight / 2));
 
           ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
+
+          // Draw goals that are not collected
+          for (let goal of colorGoals) {
+            if (!goal.collected) {
+              const gx = goal.x - offsetX;
+              const gy = goal.y - offsetY;
+              ctx.fillStyle = `rgb(${goal.r},${goal.g},${goal.b})`;
+              ctx.fillRect(gx, gy, goal.w, goal.h);
+            }
+          }
 
           // Draw NPCs
           npcs.forEach(npc => {
@@ -505,10 +498,10 @@
             }
           });
 
-          // Draw fog of war
+          // Draw fog
           ctx.drawImage(overlayCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
 
-          // Draw local player goals achievement and life
+          // UI Overlay
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.fillRect(10,10,380,80);
           ctx.fillStyle = '#FFFFFF';
@@ -517,15 +510,12 @@
           ctx.fillText(`Vida del jugador: ${Math.floor(playerLife)}`, 20,50);
           ctx.fillText(`Mantén Shift para correr (consume vida), suelta para regenerar.`, 20,70);
 
-          // Update scoreboard
           drawScoreboard();
         }
 
         function drawScoreboard() {
           let scoreboardHTML = `<strong>Marcador</strong><br>`;
-          // Local player
           scoreboardHTML += `${username} (Tú): ${collectedGoals}/${totalGoals} | Vida: ${Math.floor(playerLife)}<br>`;
-          // Other players
           for (const pId in otherPlayersData) {
             const p = otherPlayersData[pId];
             scoreboardHTML += `${p.username}: ${p.achievedGoals}/${p.totalGoals}<br>`;
@@ -572,15 +562,13 @@
           const bubbleWidth = textWidth + padding * 2;
           const bubbleHeight = textHeight + padding * 2;
 
-          // Draw bubble
           ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.strokeStyle = '#FFFFFF';
 
-          // Draw rounded rect
+          // Bubble
           const radius = 10;
           let bubbleX = x - bubbleWidth/2;
-          let bubbleY = y - bubbleHeight - 40; // 40px above head
-
+          let bubbleY = y - bubbleHeight - 40; 
           ctx.beginPath();
           ctx.moveTo(bubbleX + radius, bubbleY);
           ctx.lineTo(bubbleX + bubbleWidth - radius, bubbleY);
@@ -595,16 +583,16 @@
           ctx.fill();
           ctx.stroke();
 
-          // Draw small triangle (tail)
+          // Tail
           ctx.beginPath();
-          ctx.moveTo(x - 10, y - 40); // tail base left
-          ctx.lineTo(x + 10, y - 40); // tail base right
-          ctx.lineTo(x, y - 30); // tail tip
+          ctx.moveTo(x - 10, y - 40); 
+          ctx.lineTo(x + 10, y - 40);
+          ctx.lineTo(x, y - 30);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
 
-          // Draw text
+          // Text
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(message, bubbleX + padding, bubbleY + padding + textHeight/2);
         }
@@ -660,7 +648,7 @@
           return [r * 255, g * 255, b * 255];
         }
 
-        function drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoals) {
+        function drawHighResMap(img, scaleFactor, highResCtx, lowResData, collectibleColors, colorGoalsArray) {
           for (let y = 0; y < img.height; y++) {
             for (let x = 0; x < img.width; x++) {
               const index = (y * img.width + x) * 4;
@@ -681,13 +669,15 @@
 
                 let matchedColor = collectibleColors.find(cc => cc.r === r && cc.g === g && cc.b === b);
                 if (matchedColor) {
-                  highResCtx.fillStyle = `rgb(${r},${g},${b})`;
-                  highResCtx.fillRect(x * scaleFactor, y * scaleFactor, scaleFactor, scaleFactor);
-                  colorGoals.push({
+                  // Instead of drawing goals here, we store them.
+                  colorGoalsArray.push({
                     x: x * scaleFactor,
                     y: y * scaleFactor,
                     w: scaleFactor,
                     h: scaleFactor,
+                    r: r,
+                    g: g,
+                    b: b,
                     colorName: matchedColor.name,
                     collected: false
                   });
@@ -737,7 +727,6 @@
         }
 
         function restartGame() {
-          // Simple approach: reload the page
           location.reload();
         }
 
