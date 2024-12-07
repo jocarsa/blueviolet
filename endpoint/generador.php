@@ -1,5 +1,5 @@
 <?php
-$anchura = 64;
+$anchura = 256;
 // Create a blank 256x256 image
 $image = imagecreatetruecolor($anchura, $anchura);
 
