@@ -4,8 +4,10 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+// Use a file to save player positions and winner info
 define('POSITIONS_FILE', 'player_positions.json');
 
+// Set default timezone
 date_default_timezone_set('UTC');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $gameData = getGameData();
 
-        // Update or create player data
+        // Update player data
         $gameData['players'][$playerId] = [
             'id' => $playerId,
             'x' => $x,
@@ -53,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $recentPositions = [];
     foreach ($gameData['players'] as $playerId => $playerData) {
-        // Include players updated in the last second
         if ($currentTimestamp - $playerData['timestamp'] <= 1) {
             $recentPositions[] = $playerData;
         }
@@ -66,11 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 }
 
+// Function to get game data with winner info and players
 function getGameData() {
     if (file_exists(POSITIONS_FILE)) {
         $data = json_decode(file_get_contents(POSITIONS_FILE), true);
         if (!is_array($data)) {
-            $data = ['winnerId' => null, 'players' => []];
+            $data = ['winnerId'=>null, 'players'=>[]];
         } else {
             if (!isset($data['winnerId'])) {
                 $data['winnerId'] = null;
@@ -80,7 +82,7 @@ function getGameData() {
             }
         }
     } else {
-        $data = ['winnerId' => null, 'players' => []];
+        $data = ['winnerId'=>null, 'players'=>[]];
     }
     return $data;
 }

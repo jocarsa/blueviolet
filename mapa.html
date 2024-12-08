@@ -65,6 +65,26 @@
       color: #fff;
       border-radius: 5px;
     }
+
+    .countdownOverlay {
+      position: absolute;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background: rgba(0,0,0,0.5); 
+      display:none;
+      justify-content:center;
+      align-items:center;
+      pointer-events:none;
+    }
+    .countdownMessage {
+      font-size: 48px;
+      color: #FFFFFF;
+      background: rgba(0,0,0,0.7);
+      padding: 30px;
+      border-radius: 10px;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +94,10 @@
 
   <div class="chat-container">
     <input type="text" class="chat-input" id="chatInput" placeholder="Presiona Enter para enviar mensaje...">
+  </div>
+
+  <div class="countdownOverlay" id="countdownOverlay">
+    <div class="countdownMessage" id="countdownMessage">Reiniciando en 5...</div>
   </div>
 
   <script>
@@ -89,7 +113,10 @@
         return;
       }
 
+      // Adjust these paths as needed
       const lowResMapUrl = `endpoint/mapas/${imageName}`;
+      const multiEndpoint = 'endpoint/multi.php';
+      const resetEndpoint = 'endpoint/resetGame.php';
 
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -105,10 +132,8 @@
       let collectedGoals = 0;
       let allGoalsCollected = false;
 
-      // Player life
-      let playerLife = 100; // Start with some life
-
-      let winnerId = null; // Will be set when we know there's a winner
+      let playerLife = 100; 
+      let winnerId = null; 
       const scoreboardDiv = document.getElementById('scoreboard');
       const winnerOverlay = document.getElementById('winnerOverlay');
       const winnerMessage = document.getElementById('winnerMessage');
@@ -123,7 +148,7 @@
       let playerX, playerY;
       let overlayCanvas, overlayCtx;
 
-      let npcs = []; // Will initialize after map load
+      let npcs = []; 
 
       const collectibleColors = [
         {name: 'red',     r:255,g:0,  b:0},
@@ -134,7 +159,12 @@
         {name: 'cyan',    r:0,  g:255,b:255}
       ];
 
-      let colorGoals = []; // Will store goals and their collected state
+      let colorGoals = []; 
+
+      const countdownOverlay = document.getElementById('countdownOverlay');
+      const countdownMessage = document.getElementById('countdownMessage');
+      let countdownInterval = null;
+      let countdownSeconds = 5;
 
       class NPC {
         constructor(x, y, speed, color) {
@@ -142,7 +172,7 @@
           this.y = y;
           this.speed = speed;
           this.color = color;
-          this.size = 20; // NPC size for collision
+          this.size = 20; 
         }
 
         moveTowardPlayer(playerX, playerY, canMoveTo) {
@@ -152,7 +182,6 @@
           if (dist > 0) {
             const stepX = (dx / dist) * this.speed;
             const stepY = (dy / dist) * this.speed;
-            // Check collision for NPC
             if (canMoveTo(this.x + stepX, this.y)) {
               this.x += stepX;
             }
@@ -195,7 +224,6 @@
         highResCanvas.width = img.width * scaleFactor;
         highResCanvas.height = img.height * scaleFactor;
 
-        // Build collision map and identify goals
         collisionMap = [];
         for (let y = 0; y < img.height; y++) {
           const row = [];
@@ -334,6 +362,31 @@
             const winnerPlayer = (playerId === winnerId) ? {username: username} : 
               (otherPlayersData[winnerId] || {username: 'Unknown Winner'});
             winnerMessage.textContent = `Ganador: ${winnerPlayer.username}`;
+
+            // Start a 5-second countdown if not already started
+            if (!countdownInterval) {
+              countdownOverlay.style.display = 'flex';
+              countdownSeconds = 5;
+              countdownMessage.textContent = `Reiniciando en ${countdownSeconds}...`;
+              countdownInterval = setInterval(() => {
+                countdownSeconds--;
+                if (countdownSeconds <= 0) {
+                  clearInterval(countdownInterval);
+                  countdownInterval = null;
+
+                  // Reset the game on the server before reloading
+                  fetch(resetEndpoint)
+                    .then(() => {
+                      location.reload();
+                    })
+                    .catch(() => {
+                      location.reload();
+                    });
+                } else {
+                  countdownMessage.textContent = `Reiniciando en ${countdownSeconds}...`;
+                }
+              }, 1000);
+            }
           }
 
         }, 1000);
@@ -347,7 +400,7 @@
         }, 1000);
 
         function sendPlayerPosition(x, y, color, achievedGoals, totalGoals, message='') {
-          fetch('endpoint/multi.php', {
+          fetch(multiEndpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -368,7 +421,7 @@
 
         async function getOtherPlayersPositions() {
           try {
-            const response = await fetch('endpoint/multi.php');
+            const response = await fetch(multiEndpoint);
             if (!response.ok) {
               console.error('Failed to get other players positions:', response.status, response.statusText);
               return {players:[], winnerId:null};
@@ -385,7 +438,7 @@
           const tileX = Math.floor(nx / scaleFactor);
           const tileY = Math.floor(ny / scaleFactor);
           if (tileX < 0 || tileY < 0 || tileX >= img.width || tileY >= img.height) {
-            return false; // out of bounds
+            return false; 
           }
           return collisionMap[tileY][tileX] === 0;
         }
@@ -463,7 +516,7 @@
 
           ctx.drawImage(highResCanvas, offsetX, offsetY, viewWidth, viewHeight, 0, 0, viewWidth, viewHeight);
 
-          // Draw goals that are not collected
+          // Draw uncollected goals
           for (let goal of colorGoals) {
             if (!goal.collected) {
               const gx = goal.x - offsetX;
@@ -538,7 +591,7 @@
               const [r, g, b] = hslToRgb(targetHue, s, l);
               imageData.data[i] = r;
               imageData.data[i + 1] = g;
-              imageData.data[i + 2] = b;
+              imageData.data[i] = b;
             }
           }
           tempCtx.putImageData(imageData, 0, 0);
@@ -552,7 +605,7 @@
         function drawSpeechBubble(ctx, message, messageTime, x, y) {
           if (!message || message.trim() === '') return;
           const elapsed = Date.now() - messageTime;
-          if (elapsed > 5000) return; // Show message for 5 seconds
+          if (elapsed > 5000) return; 
 
           ctx.font = "20px Sans-serif";
           const padding = 10;
@@ -565,7 +618,6 @@
           ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.strokeStyle = '#FFFFFF';
 
-          // Bubble
           const radius = 10;
           let bubbleX = x - bubbleWidth/2;
           let bubbleY = y - bubbleHeight - 40; 
@@ -583,7 +635,6 @@
           ctx.fill();
           ctx.stroke();
 
-          // Tail
           ctx.beginPath();
           ctx.moveTo(x - 10, y - 40); 
           ctx.lineTo(x + 10, y - 40);
@@ -592,7 +643,6 @@
           ctx.fill();
           ctx.stroke();
 
-          // Text
           ctx.fillStyle = '#FFFFFF';
           ctx.fillText(message, bubbleX + padding, bubbleY + padding + textHeight/2);
         }
@@ -669,7 +719,6 @@
 
                 let matchedColor = collectibleColors.find(cc => cc.r === r && cc.g === g && cc.b === b);
                 if (matchedColor) {
-                  // Instead of drawing goals here, we store them.
                   colorGoalsArray.push({
                     x: x * scaleFactor,
                     y: y * scaleFactor,
